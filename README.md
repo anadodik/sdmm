@@ -1,7 +1,7 @@
 # SDMM
 
-Library for running Gaussian mixture models and Spatio-directional Mixture Models using the [Enoki library](https://github.com/mitsuba-renderer/enoki).
-It was a complete rewrite from the original Eigen code.
+Library for running Gaussian mixture models and spatio-directional Mixture Models using the [Enoki library](https://github.com/mitsuba-renderer/enoki).
+It is a complete rewrite from the original Eigen code.
 
 ## Getting Started
 
