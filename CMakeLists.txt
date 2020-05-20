@@ -25,6 +25,8 @@ endif()
 
 find_package(OpenMP)
 
+find_package(Eigen3 3.3 REQUIRED)
+
 find_package(Boost 1.66 REQUIRED COMPONENTS
     system
     filesystem
@@ -46,6 +48,7 @@ add_executable(sdmm
 target_include_directories(sdmm PUBLIC
     include
     ext
+    ext/enoki/include
     ${Boost_INCLUDE_DIRS}
 )
 
@@ -60,6 +63,8 @@ target_link_libraries(sdmm PUBLIC
     Boost::iostreams
     Boost::serialization
     Boost::program_options
+
+    Eigen3::Eigen
 )
 
 set(resources_source "${CMAKE_SOURCE_DIR}/resources")
