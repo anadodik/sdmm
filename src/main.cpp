@@ -4,15 +4,11 @@
 #include <enoki/matrix.h>
 #include <enoki/random.h>
 
-#include <Eigen/Dense>
-#include <Eigen/Cholesky>
-
 #include <fmt/ostream.h>
 #include <spdlog/spdlog.h>
 
-template<typename Value> constexpr auto epsilon() { return epsilon<enoki::scalar_t<Value>>(); }
-template<> constexpr auto epsilon<float>() { return 1e-5f; }
-template<> constexpr auto epsilon<double>() { return 1e-12; }
+#include "sdmm/linalg/epsilon.h"
+#include "sdmm/linalg/cholesky.h"
 
 template<typename Value, size_t Size>
 enoki::Array<Value, Size> row(const enoki::Matrix<Value, Size>& matrix, int row) {
@@ -25,34 +21,6 @@ enoki::Array<Value, Size> row(const enoki::Matrix<Value, Size>& matrix, int row)
     for (size_t i = 0; i < Array::Size; ++i)
         result[i] = ((Value *) mem)[index[i]];
     return result;
-}
-
-template<typename Value, size_t Size>
-void cholesky(
-    const enoki::Matrix<Value, Size>& in,
-    enoki::Matrix<Value, Size>& out,
-    enoki::mask_t<Value>& is_psd
-) {
-    using Matrix = enoki::Matrix<Value, Size>;
-    using Mask = enoki::mask_t<Value>;
-
-    out = enoki::zero<Matrix>();
-    
-    is_psd = Mask(true);
-    for(size_t r = 0; r < Size; ++r) {
-        Matrix out_t = enoki::transpose(out);
-        for(size_t c = 0; c < r; ++c) {
-            Value ksum = enoki::zero<Value>();
-            for(size_t k = 0; k < c; ++k) {
-                ksum += out(r, k) * out(c, k);
-            }
-            out(r, c) = (in(r, c) - ksum) / out(c, c);
-        }
-        Value row_sum = enoki::hsum(out_t.col(r) * out_t.col(r));
-        Value value = in(r, r) - row_sum;
-        is_psd = is_psd && (value > 0);
-        out(r, r) = enoki::sqrt(value);
-    }
 }
 
 template<typename Value, size_t Size>
@@ -92,20 +60,6 @@ struct SDMMParams {
     Matrix chol_inv;
 };
 
-void test_cholesky() {
-    using Vector3f = Eigen::Matrix<double, 3, 1>;
-    using Matrix3f = Eigen::Matrix<double, 3, 3>;
-    Matrix3f mat;
-    mat <<
-        0.0352478, 0.294885, 0.13223, 
-        0.294885, 2.46774, 1.10656, 
-        0.13223, 1.10656, 0.496206;
-
-    Eigen::LLT<Matrix3f> llt(mat);
-    Matrix3f result = llt.matrixL();
-    // std::cout << result << std::endl;
-}
-
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     // enoki::set_flush_denormals(true);
     spdlog::info("Hello SDMM! Using max packet size: {}", enoki::max_packet_size);
@@ -118,12 +72,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     for(int c = 0; c < 3; ++c) {
         matrix.col(c) = rng.next_float32();
     }
-    matrix = enoki::transpose(matrix) * matrix + epsilon<Matrix>(); 
+    matrix = enoki::transpose(matrix) * matrix + sdmm::linalg::epsilon<Matrix>(); 
 
     Matrix chol;
     Mask is_psd;
-    cholesky(matrix, chol, is_psd);
-    spdlog::info("chol={}", chol);
-    test_cholesky();
+    sdmm::linalg::cholesky(matrix, chol, is_psd);
+    // spdlog::info("matrix={}", matrix);
+    auto chol_diff = enoki::abs(chol * enoki::transpose(chol) - matrix) < sdmm::linalg::epsilon<float>();
+    spdlog::info("chol_diff={}", chol_diff);
     return 0;
 }
