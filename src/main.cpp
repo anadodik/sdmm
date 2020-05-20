@@ -31,9 +31,10 @@ template<typename Value, size_t Size>
 class AdjointMatrix : enoki::Matrix<Value, Size> {
 };
 
-template<typename ScalarT, int MeanSize, int CovSize>
+template<typename Scalar_, int MeanSize, int CovSize>
 struct SDMMParams {
-    using Scalar = enoki::Array<ScalarT, 64>;
+    using Scalar = enoki::Array<Scalar_, 64>;
+    using SingleVector = enoki::Array<Scalar_, MeanSize>;
     using Vector = enoki::Array<Scalar, MeanSize>;
     using Matrix = enoki::Matrix<Scalar, CovSize>;
 
@@ -47,17 +48,30 @@ struct SDMMParams {
         means = enoki::zero<Vector>();
         covs = enoki::zero<Matrix>();
     }
+    
+    void pdf(const SingleVector& point, Scalar& pdf) {
+        constexpr static Scalar INV_SQRT_TWO_PI =
+            0.39894228040143267793994605993438186847585863116492;
+        constexpr static Scalar NORMALIZATION =
+            enoki::pow(INV_SQRT_TWO_PI, CovSize);
 
-    Vector toStandardNormal(const Vector& sample) const {
-        return chol_inv * sample;
+        Vector standardized;
+        to_standard_normal(point, standardized);
+        Scalar squared_norm = enoki::hsum(
+            standardized * standardized
+        );
+        pdf = NORMALIZATION * enoki::exp(-0.5 * squared_norm);
     }
 
+    void to_standard_normal(const Vector& point, Vector& standardized) const {
+        solve(chol, point, standardized);
+    }
 
     Scalar weights;
     Vector means;
     Matrix covs;
+
     Matrix chol;
-    Matrix chol_inv;
 };
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
@@ -77,8 +91,5 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     Matrix chol;
     Mask is_psd;
     sdmm::linalg::cholesky(matrix, chol, is_psd);
-    // spdlog::info("matrix={}", matrix);
-    auto chol_diff = enoki::abs(chol * enoki::transpose(chol) - matrix) < sdmm::linalg::epsilon<float>();
-    spdlog::info("chol_diff={}", chol_diff);
     return 0;
 }

@@ -6,6 +6,14 @@
 #include "sdmm/linalg/epsilon.h"
 #include "sdmm/linalg/cholesky.h"
 
+template<typename T, typename U>
+bool enoki_approx_equals(const T& first, const U& second) {
+    return enoki::all_nested(
+        enoki::abs(first - second) <=
+        sdmm::linalg::epsilon<enoki::scalar_t<T>>()
+    );
+}
+
 TEST_CASE("Testing sdmm::linalg::choleky ") {
     static constexpr int MatSize = 3;
     static constexpr int ArraySize = 2;
@@ -36,11 +44,8 @@ TEST_CASE("Testing sdmm::linalg::choleky ") {
     sdmm::linalg::cholesky(enoki_mat, enoki_result, is_psd);
     
     SUBCASE("Checking for consistency") {
-        CHECK(enoki::all_nested(
-            enoki::abs(
-                enoki_result * enoki::transpose(enoki_result) - enoki_mat
-            ) <=
-            sdmm::linalg::epsilon<float>()
+        CHECK(enoki_approx_equals(
+            enoki_result * enoki::transpose(enoki_result), enoki_mat
         ));
     }
 
@@ -60,6 +65,17 @@ TEST_CASE("Testing sdmm::linalg::choleky ") {
                 }
             }
         }
+    }
+
+    SUBCASE("Checking solve.") {
+        using SingleVector = enoki::Array<float, MatSize>;
+        using Vector = enoki::Array<Array, MatSize>;
+
+        SingleVector b({1, 2, 0.5});
+        Vector x;
+        sdmm::linalg::solve(enoki_result, b, x);
+        Vector b_check = enoki_result * x;
+        CHECK(enoki_approx_equals(b, b_check));
     }
 }
 
