@@ -3,18 +3,11 @@
 #include <Eigen/Cholesky>
 #include <Eigen/Dense>
 
-#include "sdmm/linalg/epsilon.h"
 #include "sdmm/linalg/cholesky.h"
 
-template<typename T, typename U>
-bool enoki_approx_equals(const T& first, const U& second) {
-    return enoki::all_nested(
-        enoki::abs(first - second) <=
-        sdmm::linalg::epsilon<enoki::scalar_t<T>>()
-    );
-}
+#include "utils.h"
 
-TEST_CASE("Testing sdmm::linalg::choleky ") {
+TEST_CASE("Testing sdmm::linalg::choleky.") {
     static constexpr int MatSize = 3;
     static constexpr int ArraySize = 2;
     using Matrix3f = Eigen::Matrix<double, MatSize, MatSize>;
@@ -49,7 +42,7 @@ TEST_CASE("Testing sdmm::linalg::choleky ") {
         ));
     }
 
-    SUBCASE("Checking against Eigen::LLT") {
+    SUBCASE("Checking against Eigen::LLT.") {
         for(int mat_i = 0; mat_i < ArraySize; ++mat_i) {
             Eigen::LLT<Matrix3f> llt(eigen_mats[mat_i]);
             Matrix3f eigen_result = llt.matrixL();
@@ -61,7 +54,8 @@ TEST_CASE("Testing sdmm::linalg::choleky ") {
                             eigen_result(r, c) -
                             enoki_result(r, c).coeff(mat_i)
                         ),
-                        sdmm::linalg::epsilon<float>());
+                        sdmm::epsilon<float>
+                    );
                 }
             }
         }

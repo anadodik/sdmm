@@ -33,28 +33,10 @@ void cholesky(
     }
 }
 
-// TODO: cache 1 / diag(L).
-template<typename Value, size_t Size>
+template<typename Value, typename ValueB, size_t Size>
 void solve(
     const enoki::Matrix<Value, Size>& L,
-    const enoki::Array<Value, Size>& b,
-    enoki::Array<Value, Size>& x
-) {
-    static_assert("Untested!");
-    x(0) = b(0) / L(0, 0);
-    for(int r = 1; r < Size; ++r) {
-        Value numerator = b(r);
-        for(int c = 0; c < r; ++c) {
-            numerator -= L(r, c);
-        }
-        x(r) = numerator / L(r, r);
-    }
-}
-
-template<typename Value, size_t Size>
-void solve(
-    const enoki::Matrix<Value, Size>& L,
-    const enoki::Array<enoki::scalar_t<Value>, Size>& b,
+    const enoki::Array<ValueB, Size>& b,
     enoki::Array<Value, Size>& x
 ) {
     x[0] = b[0] / L(0, 0);
@@ -64,6 +46,7 @@ void solve(
             numerator -= L(r, c) * x[c];
         }
         x[r] = numerator / L(r, r);
+        assert(enoki::any(L(r, r) != Value(0)));
     }
 }
 

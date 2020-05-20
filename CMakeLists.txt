@@ -48,7 +48,14 @@ target_link_libraries(app PRIVATE sdmm)
 #     COMMENT "Copying resources folder from \"${resources_source}\" => \"${resources_destination}\"."
 # )
 
-add_executable(tests tests/tests.cpp tests/linalg.cpp)
+add_executable(
+    tests
+
+    tests/tests.cpp
+    tests/linalg.cpp
+    tests/distributions.cpp
+)
+target_include_directories(tests PRIVATE tests)
 target_compile_features(tests PRIVATE cxx_std_17)
 target_link_libraries(tests PRIVATE sdmm Eigen3::Eigen doctest::doctest)
 
