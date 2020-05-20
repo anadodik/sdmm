@@ -1,7 +1,6 @@
 #include <doctest/doctest.h>
 
 #include <Eigen/Cholesky>
-#include <Eigen/Dense>
 
 #include "sdmm/linalg/cholesky.h"
 
@@ -36,8 +35,8 @@ TEST_CASE("Testing sdmm::linalg::choleky.") {
     Mask is_psd;
     sdmm::linalg::cholesky(enoki_mat, enoki_result, is_psd);
     
-    SUBCASE("Checking for consistency") {
-        CHECK(enoki_approx_equals(
+    SUBCASE("Checking A = L * L^T for consistency.") {
+        CHECK(approx_equals(
             enoki_result * enoki::transpose(enoki_result), enoki_mat
         ));
     }
@@ -46,22 +45,14 @@ TEST_CASE("Testing sdmm::linalg::choleky.") {
         for(int mat_i = 0; mat_i < ArraySize; ++mat_i) {
             Eigen::LLT<Matrix3f> llt(eigen_mats[mat_i]);
             Matrix3f eigen_result = llt.matrixL();
-            // TODO: find better solution then running 12 tests.
-            for(int r = 0; r < MatSize; ++r) {
-                for(int c = 0; c < r + 1; ++c) {
-                    CHECK_LE(
-                        std::abs(
-                            eigen_result(r, c) -
-                            enoki_result(r, c).coeff(mat_i)
-                        ),
-                        sdmm::epsilon<float>
-                    );
-                }
-            }
+            approx_equals_lower_tri(
+                enoki_result,
+                eigen_result
+            );
         }
     }
 
-    SUBCASE("Checking solve.") {
+    SUBCASE("Checking solve for consistency.") {
         using SingleVector = enoki::Array<float, MatSize>;
         using Vector = enoki::Array<Array, MatSize>;
 
@@ -69,7 +60,7 @@ TEST_CASE("Testing sdmm::linalg::choleky.") {
         Vector x;
         sdmm::linalg::solve(enoki_result, b, x);
         Vector b_check = enoki_result * x;
-        CHECK(enoki_approx_equals(b, b_check));
+        CHECK(approx_equals(b, b_check));
     }
 }
 

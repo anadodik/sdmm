@@ -18,7 +18,7 @@ TEST_CASE("Testing sdmm::pdf scalar test.") {
 
     // Compare to results from NumPy
     Value expected_pdf = 0.025110965476047437f;
-    CHECK(enoki_approx_equals(pdf, expected_pdf));
+    CHECK(approx_equals(pdf, expected_pdf));
 }
 
 TEST_CASE("Testing sdmm::pdf vector test.") {
@@ -33,7 +33,7 @@ TEST_CASE("Testing sdmm::pdf vector test.") {
     distribution.prepare();
 
     Value pdf(0);
-    SUBCASE("point={1, 2}.") {
+    SUBCASE("Calculating pdf for point={1, 2}.") {
         sdmm::vector_s_t<SDMM> point({1, 2});
         distribution.pdf_gaussian(point, pdf);
 
@@ -42,16 +42,16 @@ TEST_CASE("Testing sdmm::pdf vector test.") {
             0.05207269256276517f,
             0.0018674935212148857f
         });
-        CHECK(enoki_approx_equals(pdf, expected_pdf));
+        CHECK(approx_equals(pdf, expected_pdf));
     }
 
-    SUBCASE("point={0, 0}.") {
+    SUBCASE("Calculating pdf for point={0, 0}.") {
         sdmm::vector_s_t<SDMM> point({0, 0});
         distribution.pdf_gaussian(point, pdf);
         Value expected_pdf({
             0.054777174730721315f,
             0.002397909146739601f
         });
-        CHECK(enoki_approx_equals(pdf, expected_pdf));
+        CHECK(approx_equals(pdf, expected_pdf));
     }
 }
