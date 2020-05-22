@@ -3,19 +3,22 @@
 #include <enoki/array.h>
 #include <enoki/matrix.h>
 
+#include <fmt/ostream.h>
+#include <fmt/ranges.h>
+#include <spdlog/spdlog.h>
+
 namespace sdmm::linalg {
 
-template<typename Value, size_t Size>
+template<typename Value_, size_t Size, typename Value=std::decay_t<Value_>>
 void cholesky(
-    const enoki::Matrix<Value, Size>& in,
-    enoki::Matrix<Value, Size>& out,
-    enoki::mask_t<Value>& is_psd
+    const enoki::Matrix<Value_, Size>& in,
+    enoki::Matrix<Value_, Size>& out,
+    enoki::mask_t<Value_>& is_psd
 ) {
     using Matrix = enoki::Matrix<Value, Size>;
     using Mask = enoki::mask_t<Value>;
 
     out = enoki::zero<Matrix>();
-    
     is_psd = Mask(true);
     for(size_t r = 0; r < Size; ++r) {
         for(size_t c = 0; c < r; ++c) {
@@ -33,20 +36,26 @@ void cholesky(
     }
 }
 
-template<typename Value, typename ValueB, size_t Size>
+template<
+    typename ValueLHS_,
+    typename ValueRHS_,
+    size_t Size,
+    typename ValueLHS = std::decay_t<ValueLHS_>,
+    typename ValueRHS = std::decay_t<ValueRHS_>
+>
 void solve(
-    const enoki::Matrix<Value, Size>& L,
-    const enoki::Array<ValueB, Size>& b,
-    enoki::Array<Value, Size>& x
+    const enoki::Matrix<ValueLHS_, Size>& L,
+    const enoki::Array<ValueRHS_, Size>& b,
+    enoki::Array<ValueLHS_, Size>& x
 ) {
     x[0] = b[0] / L(0, 0);
     for(size_t r = 1; r < Size; ++r) {
-        Value numerator = b[r];
+        ValueLHS numerator = b[r];
         for(size_t c = 0; c < r; ++c) {
             numerator -= L(r, c) * x[c];
         }
         x[r] = numerator / L(r, r);
-        assert(enoki::any(L(r, r) != Value(0)));
+        assert(enoki::any(L(r, r) != ValueLHS(0)));
     }
 }
 

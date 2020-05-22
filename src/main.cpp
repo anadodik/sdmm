@@ -1,6 +1,7 @@
 #include <cassert>
 
 #include <enoki/array.h>
+#include <enoki/dynamic.h>
 #include <enoki/matrix.h>
 #include <enoki/random.h>
 
@@ -25,23 +26,41 @@ enoki::Array<Value, Size> row(const enoki::Matrix<Value, Size>& matrix, int row)
     return result;
 }
 
+template<typename SDMM>
+void random_init(const SDMM& distribution) {
+    using RNG = enoki::PCG32<typename SDMM::Value>;
+    RNG rng(
+        PCG32_DEFAULT_STATE,
+        enoki::arange<typename SDMM::Value>(slices(distribution))
+    );
+    spdlog::info("rng generated {}.", rng.next_float32());
+    spdlog::info("rng generated {}.", rng.next_float32());
+    // for (size_t i = 0; i < packets(coord1); ++i) {
+    //     packet(distribution, i) = 
+    // }
+}
+
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     // enoki::set_flush_denormals(true);
     spdlog::info("Hello SDMM! Using max packet size: {}", enoki::max_packet_size);
 
-    using Value = enoki::Array<float, 2>;
-    using SDMM = sdmm::SDMM<Value, 2, 2>;
-    SDMM distribution;
-    distribution.mean = sdmm::vector_t<SDMM>(0, 1);
-    distribution.cov = sdmm::matrix_t<SDMM>(
-        Value(3, 2), Value(0.5, 0),
-        Value(0.5, 0), Value(1.4, 0.1)
-    );
-    distribution.prepare();
+    using Packet = enoki::Packet<float, 32>;
+    using Array = enoki::DynamicArray<Packet>;
+    using SDMM = sdmm::SDMM<Array, 2, 2>;
 
-    sdmm::vector_s_t<SDMM> point({0, 0});
-    Value pdf(0);
-    distribution.pdf_gaussian(point, pdf);
-    spdlog::info("pdf={}", pdf);
+    SDMM distribution;
+    enoki::set_slices(distribution, 100);
+    random_init(distribution);
+    // distribution.mean = sdmm::vector_t<SDMM>(0, 1);
+    // distribution.cov = sdmm::matrix_t<SDMM>(
+    //     Value(3, 2), Value(0.5, 0),
+    //     Value(0.5, 0), Value(1.4, 0.1)
+    // );
+    // distribution.prepare();
+
+    // sdmm::vector_s_t<SDMM> point({0, 0});
+    // Value pdf(0);
+    // distribution.pdf_gaussian(point, pdf);
+    // spdlog::info("pdf={}", pdf);
     return 0;
 }
