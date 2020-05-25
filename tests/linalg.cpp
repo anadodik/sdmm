@@ -9,31 +9,15 @@
 
 #include "utils.h"
 
-template<typename Value, typename Enable=void>
-struct packet_size;
-
-template<typename Value>
-struct packet_size<Value, std::enable_if_t<enoki::is_dynamic_v<Value>>> {
-    static constexpr size_t value = Value::PacketSize;
-};
-
-template<typename Value>
-struct packet_size<Value, std::enable_if_t<!enoki::is_dynamic_v<Value>>> {
-    static constexpr size_t value = Value::Size;
-};
-
-template<typename Value>
-static constexpr size_t packet_size_v = packet_size<Value>::value;
-
 
 template<typename Value>
 void test_cholesky() {
-    static constexpr size_t ArraySize = packet_size_v<Value>;
+    static constexpr size_t ArraySize = sdmm::nested_packet_size_v<Value>;
     static constexpr size_t MatSize = 3;
     using Matrix3f = Eigen::Matrix<float, MatSize, MatSize>;
 
-    using Vector = enoki::Array<Value, MatSize>;
-    using Matrix = enoki::Matrix<Value, MatSize>;
+    using Vector = sdmm::Vector<Value, MatSize>;
+    using Matrix = sdmm::Matrix<Value, MatSize>;
     using Mask = enoki::mask_t<Value>;
 
     std::array<Matrix3f, ArraySize> eigen_mats;
@@ -86,18 +70,18 @@ void test_cholesky() {
     }
 
     SUBCASE("sdmm::linalg::solve -- consistency check, RHS==scalar") {
-        enoki::Array<float, 3> b{1, 2, 0.5};
+        sdmm::Vector<float, 3> b{1, 2, 0.5};
         Vector x;
         enoki::set_slices(x, 2);
         if constexpr(enoki::is_dynamic_v<Value>) {
             enoki::vectorize_safe(
-                VECTORIZE_WRAP(sdmm::linalg::solve),
+                VECTORIZE_WRAP_OUTPUT(sdmm::linalg::solve),
+                x,
                 enoki_result,
-                b,
-                x
+                b
             );
         } else {
-            sdmm::linalg::solve(enoki_result, b, x);
+            x = sdmm::linalg::solve(enoki_result, b);
         }
         Vector b_check = enoki_result * x;
         CHECK(approx_equals(b, b_check));
@@ -113,13 +97,13 @@ void test_cholesky() {
         enoki::set_slices(x, 2);
         if constexpr(enoki::is_dynamic_v<Value>) {
             enoki::vectorize_safe(
-                VECTORIZE_WRAP(sdmm::linalg::solve),
+                VECTORIZE_WRAP_OUTPUT(sdmm::linalg::solve),
+                x,
                 enoki_result,
-                b,
-                x
+                b
             );
         } else {
-            sdmm::linalg::solve(enoki_result, b, x);
+            x = sdmm::linalg::solve(enoki_result, b);
         }
         Vector b_check = enoki_result * x;
         CHECK(approx_equals(b, b_check));

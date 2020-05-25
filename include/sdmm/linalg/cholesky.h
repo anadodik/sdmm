@@ -7,6 +7,8 @@
 #include <fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
+#include "sdmm/core/utils.h"
+
 namespace sdmm::linalg {
 
 template<typename Value_, size_t Size, typename Value=std::decay_t<Value_>>
@@ -40,14 +42,14 @@ template<
     typename ValueLHS_,
     typename ValueRHS_,
     size_t Size,
-    typename ValueLHS = std::decay_t<ValueLHS_>,
-    typename ValueRHS = std::decay_t<ValueRHS_>
+    typename ValueLHS = enoki::expr_t<ValueLHS_>,
+    typename ValueRHS = enoki::expr_t<ValueRHS_>
 >
-void solve(
-    const enoki::Matrix<ValueLHS_, Size>& L,
-    const enoki::Array<ValueRHS_, Size>& b,
-    enoki::Array<ValueLHS_, Size>& x
+Vector<ValueLHS, Size> solve(
+    const Matrix<ValueLHS_, Size>& L,
+    const Vector<ValueRHS_, Size>& b
 ) {
+    Vector<ValueLHS, Size> x;
     x[0] = b[0] / L(0, 0);
     for(size_t r = 1; r < Size; ++r) {
         ValueLHS numerator = b[r];
@@ -57,6 +59,7 @@ void solve(
         x[r] = numerator / L(r, r);
         assert(enoki::any(L(r, r) != ValueLHS(0)));
     }
+    return x;
 }
 
 }

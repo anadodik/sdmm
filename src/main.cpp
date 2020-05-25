@@ -28,10 +28,10 @@ enoki::Array<Value, Size> row(const enoki::Matrix<Value, Size>& matrix, int row)
 
 template<typename SDMM>
 void random_init(const SDMM& distribution) {
-    using RNG = enoki::PCG32<typename SDMM::Value>;
+    using RNG = enoki::PCG32<typename SDMM::Packet>;
     RNG rng(
         PCG32_DEFAULT_STATE,
-        enoki::arange<typename SDMM::Value>(slices(distribution))
+        enoki::arange<typename SDMM::Packet>(slices(distribution))
     );
     spdlog::info("rng generated {}.", rng.next_float32());
     spdlog::info("rng generated {}.", rng.next_float32());
@@ -42,15 +42,15 @@ void random_init(const SDMM& distribution) {
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     // enoki::set_flush_denormals(true);
-    spdlog::info("Hello SDMM! Using max packet size: {}", enoki::max_packet_size);
+    // spdlog::info("Hello SDMM! Using max packet size: {}", enoki::max_packet_size);
 
-    using Packet = enoki::Packet<float, 32>;
-    using Array = enoki::DynamicArray<Packet>;
-    using SDMM = sdmm::SDMM<Array, 2, 2>;
+    // using Packet = enoki::Packet<float, 32>;
+    // using Array = enoki::DynamicArray<Packet>;
+    // using SDMM = sdmm::SDMM<Array, 2, 2>;
 
-    SDMM distribution;
-    enoki::set_slices(distribution, 100);
-    random_init(distribution);
+    // SDMM distribution;
+    // enoki::set_slices(distribution, 100);
+    // random_init(distribution);
     // distribution.mean = sdmm::vector_t<SDMM>(0, 1);
     // distribution.cov = sdmm::matrix_t<SDMM>(
     //     Value(3, 2), Value(0.5, 0),

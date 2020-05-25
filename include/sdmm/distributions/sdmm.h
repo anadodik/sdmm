@@ -9,6 +9,7 @@
 #include <spdlog/spdlog.h>
 
 #include "sdmm/core/constants.h"
+#include "sdmm/core/utils.h"
 #include "sdmm/linalg/cholesky.h"
 
 namespace sdmm {
@@ -25,66 +26,125 @@ using vector_s_t = typename T::VectorS;
 template<typename T>
 using matrix_s_t = typename T::MatrixS;
 
-template<typename Value, size_t MeanSize, size_t CovSize>
+template<
+    typename Vector_,
+    typename Matrix_
+    // typename Vector=enoki::expr_t<Vector_>,
+    // typename Matrix=enoki::expr_t<Matrix_>
+>
 struct SDMM {
-    using VectorS = enoki::Array<enoki::scalar_t<Value>, MeanSize>;
-    using MatrixS = enoki::Matrix<enoki::scalar_t<Value>, CovSize>;
+    static_assert(
+        std::is_same_v<enoki::scalar_t<Vector_>, enoki::scalar_t<Matrix_>>
+    );
 
-    using Vector = enoki::Array<Value, MeanSize>;
-    using Matrix = enoki::Matrix<Value, CovSize>;
-    using Mask = enoki::mask_t<Value>;
+    static constexpr size_t MeanSize = enoki::array_size_v<Vector_>;
+    static constexpr size_t CovSize = enoki::array_size_v<Matrix_>;
 
-    SDMM() = default;
-    SDMM(SDMM&& other) = default;
-    SDMM(const SDMM& other) = default;
-    SDMM& operator=(SDMM&& other) = default;
-    SDMM& operator=(const SDMM& other) = default;
+    using Scalar = enoki::value_t<Vector_>;
+    using Vector = Vector_;
+    using Matrix = Matrix_;
+    using Mask = enoki::mask_t<Scalar>;
 
-    void zero() {
-        weight = enoki::zero<Value>();
-        mean = enoki::zero<Vector>();
-        cov = enoki::zero<Matrix>();
-    }
+    using ScalarExpr = enoki::expr_t<Scalar>;
+    using VectorExpr = enoki::expr_t<Vector>;
+    using MatrixExpr = enoki::expr_t<Matrix>;
+    using MaskExpr = enoki::expr_t<Mask>;
 
-    void prepare() {
-        sdmm::linalg::cholesky(cov, cov_sqrt, cov_is_psd);
-        inv_cov_sqrt_det = Value(1) / enoki::hprod(enoki::diag(cov_sqrt));
-        assert(enoki::all(cov_is_psd));
-    }
+    using ScalarS = enoki::scalar_t<Scalar>;
+    using VectorS = sdmm::Vector<ScalarS, MeanSize>;
+    using MatrixS = sdmm::Matrix<ScalarS, CovSize>;
+    using MaskS = enoki::mask_t<ScalarS>;
+
+    using Packet = nested_packet_t<Scalar>;
+
+    void prepare();
+
+    // void posterior(const VectorS& point, Value& posterior) const;
+
+    // void pdf(const VectorS& point, Scalar& pdf) const;
     
-    void pdf_gaussian(const VectorS& point, Value& pdf) const;
+    void pdf_gaussian(const VectorS& point, Scalar& pdf) const;
 
-    void to_standard_normal(const Vector& point, Vector& standardized) const {
-        sdmm::linalg::solve(cov_sqrt, point, standardized);
-    }
+    VectorExpr to_standard_normal(const Vector& point) const;
 
-    Vector euclidian_log_map(const Vector& embedded) const {
-        return embedded - mean;
-    }
+    VectorExpr euclidian_log_map(const VectorS& embedded) const;
 
-    Value weight;
+    // Make sure to update the ENOKI_STRUCT and ENOKI_STRUCT_SUPPORT
+    // declarations when modifying these variables.
+    Scalar weight;
     Vector mean;
     Matrix cov;
 
     Matrix cov_sqrt;
-    Value inv_cov_sqrt_det;
+    Scalar inv_cov_sqrt_det;
     Mask cov_is_psd;
+
+    ENOKI_STRUCT(
+        SDMM,
+
+        weight,
+        mean,
+        cov,
+        cov_sqrt,
+        inv_cov_sqrt_det,
+        cov_is_psd
+    );
 };
 
-template<typename Value, size_t MeanSize, size_t CovSize>
-void SDMM<Value, MeanSize, CovSize>::pdf_gaussian(
-    const SDMM<Value, MeanSize, CovSize>::VectorS& point, Value& pdf
-) const {
-    Vector standardized;
-    to_standard_normal(euclidian_log_map(point), standardized);
-    Value squared_norm = enoki::hsum(
-        standardized * standardized
-    );
+template<typename Vector_, typename Matrix_>
+auto SDMM<Vector_, Matrix_>::prepare() -> void {
+    sdmm::linalg::cholesky(cov, cov_sqrt, cov_is_psd);
+    inv_cov_sqrt_det = 1.f / enoki::hprod(enoki::diag(cov_sqrt));
+    assert(enoki::all(cov_is_psd));
+}
 
+template<typename Vector_, typename Matrix_>
+auto SDMM<Vector_, Matrix_>::euclidian_log_map(
+    const VectorS& embedded
+) const -> VectorExpr {
+    return embedded - mean;
+}
+
+
+template<typename Vector_, typename Matrix_>
+auto SDMM<Vector_, Matrix_>::to_standard_normal(
+    const Vector& point
+) const -> VectorExpr {
+    VectorExpr standardized;
+    return sdmm::linalg::solve(cov_sqrt, point);
+}
+
+template<typename Vector_, typename Matrix_>
+auto SDMM<Vector_, Matrix_>::pdf_gaussian(
+    const VectorS& point, Scalar& pdf
+) const -> void {
+    VectorExpr tangent = euclidian_log_map(point);
+    VectorExpr standardized = to_standard_normal(tangent);
+    ScalarExpr squared_norm = enoki::hsum(standardized * standardized);
     pdf =
         inv_cov_sqrt_det *
-        gaussian_normalization<enoki::scalar_t<Value>, CovSize> *
-        enoki::exp(Value(-0.5) * squared_norm);
+        gaussian_normalization<ScalarS, CovSize> *
+        enoki::exp(ScalarS(-0.5) * squared_norm);
 }
 
+// template<typename Value, size_t MeanSize, size_t CovSize>
+// void SDMM<Value, MeanSize, CovSize>::pdf(
+//     const VectorS& point, Scalar& pdf
+// ) const {
+//     Value component_pdf;
+//     pdf_gaussian(point, pdf);
+//     pdf = enoki::hsum(weight * component_pdf);
+// }
+// 
+// template<typename Value, size_t MeanSize, size_t CovSize>
+// void SDMM<Value, MeanSize, CovSize>::posterior(
+//     const VectorS& point, Value& posterior
+// ) const {
+//     pdf_gaussian(point, posterior);
+//     posterior *= weight;
+// }
+// 
+
 }
+
+ENOKI_STRUCT_SUPPORT(sdmm::SDMM, weight, mean, cov, cov_sqrt, inv_cov_sqrt_det, cov_is_psd)
