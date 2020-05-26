@@ -4,11 +4,12 @@
 #include <enoki/matrix.h>
 #include <enoki/dynamic.h>
 
+#include "sdmm/distributions/categorical.h"
 #include "sdmm/distributions/sdmm.h"
 
 #include "utils.h"
 
-TEST_CASE("sdmm::pdf<float>") {
+TEST_CASE("SDMM::pdf<float>") {
     using Value = float;
     using TangentSpace = 
         sdmm::EuclidianTangentSpace<
@@ -33,7 +34,7 @@ TEST_CASE("sdmm::pdf<float>") {
     CHECK(approx_equals(pdf, expected_pdf));
 }
 
-TEST_CASE("sdmm::pdf<Array>") {
+TEST_CASE("SDMM::pdf<Array>") {
     using Value = enoki::Array<float, 2>;
     using TangentSpace = 
         sdmm::EuclidianTangentSpace<
@@ -75,8 +76,8 @@ TEST_CASE("sdmm::pdf<Array>") {
     }
 }
 
-TEST_CASE("sdmm::pdf<DynamicArray>") {
-    using Packet = enoki::Array<float, 2>;
+TEST_CASE("SDMM::pdf<DynamicArray>") {
+    using Packet = enoki::Packet<float, 2>;
     using Value = enoki::DynamicArray<Packet>;
     using TangentSpace = 
         sdmm::EuclidianTangentSpace<
@@ -142,3 +143,35 @@ TEST_CASE("sdmm::pdf<DynamicArray>") {
         )));
     }
 }
+
+TEST_CASE("Categorical<Value>") {
+    using Packet = enoki::Packet<float, 2>;
+    using DynamicValue = enoki::DynamicArray<Packet>;
+    using Color = sdmm::Vector<DynamicValue, 3>;
+    using Categorical = sdmm::Categorical<Color>;
+    using BoolOuter = typename Categorical::BoolOuter;
+
+    SUBCASE("Categorical::is_valid()") {
+        Categorical categorical = enoki::zero<Categorical>(5);
+        CHECK(categorical.is_valid() == BoolOuter{false, false, false});
+        categorical.pmf.x() = enoki::full<DynamicValue>(1, 5);
+        categorical.pmf.y() = enoki::full<DynamicValue>(1, 5);
+        CHECK(categorical.is_valid() == BoolOuter{true, true, false});
+        categorical.pmf.z() = enoki::full<DynamicValue>(1, 5);
+        CHECK(categorical.is_valid() == BoolOuter{true, true, true});
+        categorical.pmf.z().coeff(0) = 0.f;
+        CHECK(categorical.is_valid() == BoolOuter{true, true, true});
+    }
+
+    SUBCASE("Categorical::prepare()") {
+        Categorical categorical = enoki::zero<Categorical>(5);
+        enoki::set_slices(categorical, 5);
+        categorical.pmf = enoki::full<Color>(1, 5);
+        categorical.pmf.z() = enoki::zero<DynamicValue>(5);
+        CHECK(categorical.prepare() == BoolOuter{true, true, false});
+        Color expected = (enoki::arange<DynamicValue>(5) + 1) / 5.f;
+        expected.z() = enoki::zero<DynamicValue>(5);
+        CHECK(categorical.cdf == expected);
+    }
+}
+

@@ -4,7 +4,6 @@
 #include <enoki/matrix.h>
 
 #include <fmt/ostream.h>
-#include <fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
 #include "sdmm/core/utils.h"

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <fmt/ostream.h>
-#include <fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
 #include <enoki/array.h>
@@ -9,7 +8,7 @@
 
 #define VECTORIZE_WRAP(FUNC_NAME) [](auto&&... params) { FUNC_NAME(params...); }
 #define VECTORIZE_WRAP_OUTPUT(FUNC_NAME) [](auto&& output, auto&&... params) { output = FUNC_NAME(params...); }
-#define VECTORIZE_WRAP_MEMBER(FUNC_NAME) [](auto&& obj, [[maybe_unused]] auto&&... params) { obj.FUNC_NAME(params...); }
+#define VECTORIZE_WRAP_MEMBER(FUNC_NAME) [](auto&& obj, [[maybe_unused]] auto&&... params) { return obj.FUNC_NAME(params...); }
 
 namespace sdmm {
 
