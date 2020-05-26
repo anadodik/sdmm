@@ -60,6 +60,8 @@ struct SDMM {
 
     // void pdf(const VectorS& point, Scalar& pdf) const;
     
+    void pdf_gaussian(const VectorS& point, Scalar& pdf, Vector& tangent) const;
+
     void pdf_gaussian(const VectorS& point, Scalar& pdf) const;
 
     VectorExpr to_standard_normal(const Vector& point) const;
@@ -106,15 +108,24 @@ auto SDMM<Vector_, Matrix_, TangentSpace_>::to_standard_normal(
 
 template<typename Vector_, typename Matrix_, typename TangentSpace_>
 auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
-    const VectorS& point, Scalar& pdf
+    const VectorS& point, Scalar& pdf, Vector& tangent
 ) const -> void {
-    VectorExpr tangent = tangent_space.to(point);
+    tangent = tangent_space.to(point);
     VectorExpr standardized = to_standard_normal(tangent);
     ScalarExpr squared_norm = enoki::hsum(standardized * standardized);
     pdf =
         inv_cov_sqrt_det *
         gaussian_normalization<ScalarS, CovSize> *
         enoki::exp(ScalarS(-0.5) * squared_norm);
+}
+
+template<typename Vector_, typename Matrix_, typename TangentSpace_>
+auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
+    const VectorS& point, Scalar& pdf
+) const -> void {
+    VectorExpr tangent;
+    Vector tangent_ref = tangent;
+    pdf_gaussian(point, pdf, tangent_ref);
 }
 
 // template<typename Value, size_t MeanSize, size_t CovSize>

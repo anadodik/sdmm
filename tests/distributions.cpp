@@ -88,7 +88,11 @@ TEST_CASE("sdmm::pdf<DynamicArray>") {
     >;
     SDMM distribution;
     enoki::set_slices(distribution, 2);
-    distribution.tangent_space.set_mean(sdmm::vector_t<SDMM>(0, 1));
+    distribution.tangent_space.set_mean(
+        sdmm::vector_t<SDMM>(
+            Value(0, 0), Value(1, 1)
+        )
+    );
     distribution.cov = sdmm::matrix_t<SDMM>(
         Value(3, 2), Value(0.5, 0),
         Value(0.5, 0), Value(1.4, 0.1)
@@ -127,5 +131,14 @@ TEST_CASE("sdmm::pdf<DynamicArray>") {
             0.002397909146739601f
         });
         CHECK(approx_equals(pdf, expected_pdf));
+    }
+
+    SUBCASE("Calculating pdf for point={0, 0}, external tangent vector.") {
+        sdmm::vector_s_t<SDMM> point({0, 0});
+        sdmm::vector_t<SDMM> tangent_vectors;
+        distribution.pdf_gaussian(point, pdf, tangent_vectors);
+        CHECK(approx_equals(tangent_vectors, sdmm::vector_t<SDMM>(
+            Value(0, 0), Value(-1, -1)
+        )));
     }
 }
