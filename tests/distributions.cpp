@@ -10,10 +10,17 @@
 
 TEST_CASE("sdmm::pdf<float>") {
     using Value = float;
-    using SDMM = sdmm::SDMM<sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>>;
+    using TangentSpace = 
+        sdmm::EuclidianTangentSpace<
+            sdmm::Vector<Value, 2>,
+            sdmm::Vector<Value, 2>
+        >;
+    using SDMM = sdmm::SDMM<
+        sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, TangentSpace
+    >;
 
     SDMM distribution;
-    distribution.mean = sdmm::vector_t<SDMM>(0);
+    distribution.tangent_space.set_mean(sdmm::vector_t<SDMM>(0));
     distribution.cov = enoki::diag<sdmm::matrix_t<SDMM>>({1, 2});;
     distribution.prepare();
 
@@ -28,9 +35,16 @@ TEST_CASE("sdmm::pdf<float>") {
 
 TEST_CASE("sdmm::pdf<Array>") {
     using Value = enoki::Array<float, 2>;
-    using SDMM = sdmm::SDMM<sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>>;
+    using TangentSpace = 
+        sdmm::EuclidianTangentSpace<
+            sdmm::Vector<Value, 2>,
+            sdmm::Vector<Value, 2>
+        >;
+    using SDMM = sdmm::SDMM<
+        sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, TangentSpace
+    >;
     SDMM distribution;
-    distribution.mean = sdmm::vector_t<SDMM>(0, 1);
+    distribution.tangent_space.set_mean(sdmm::vector_t<SDMM>(0, 1));
     distribution.cov = sdmm::matrix_t<SDMM>(
         Value(3, 2), Value(0.5, 0),
         Value(0.5, 0), Value(1.4, 0.1)
@@ -64,10 +78,17 @@ TEST_CASE("sdmm::pdf<Array>") {
 TEST_CASE("sdmm::pdf<DynamicArray>") {
     using Packet = enoki::Array<float, 2>;
     using Value = enoki::DynamicArray<Packet>;
-    using SDMM = sdmm::SDMM<sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>>;
+    using TangentSpace = 
+        sdmm::EuclidianTangentSpace<
+            sdmm::Vector<Value, 2>,
+            sdmm::Vector<Value, 2>
+        >;
+    using SDMM = sdmm::SDMM<
+        sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, TangentSpace
+    >;
     SDMM distribution;
     enoki::set_slices(distribution, 2);
-    distribution.mean = sdmm::vector_t<SDMM>(0, 1);
+    distribution.tangent_space.set_mean(sdmm::vector_t<SDMM>(0, 1));
     distribution.cov = sdmm::matrix_t<SDMM>(
         Value(3, 2), Value(0.5, 0),
         Value(0.5, 0), Value(1.4, 0.1)
@@ -76,6 +97,8 @@ TEST_CASE("sdmm::pdf<DynamicArray>") {
         VECTORIZE_WRAP_MEMBER(prepare),
         distribution
     );
+
+    sdmm::EuclidianTangentSpace<sdmm::Vector<Value, 3>, sdmm::Vector<Value, 3>> tangent_space;
 
     Value pdf(0);
     enoki::set_slices(pdf, 2);

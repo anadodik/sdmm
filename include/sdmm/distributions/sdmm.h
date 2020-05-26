@@ -11,6 +11,7 @@
 #include "sdmm/core/constants.h"
 #include "sdmm/core/utils.h"
 #include "sdmm/linalg/cholesky.h"
+#include "sdmm/spaces/euclidian.h"
 
 namespace sdmm {
 
@@ -26,12 +27,7 @@ using vector_s_t = typename T::VectorS;
 template<typename T>
 using matrix_s_t = typename T::MatrixS;
 
-template<
-    typename Vector_,
-    typename Matrix_
-    // typename Vector=enoki::expr_t<Vector_>,
-    // typename Matrix=enoki::expr_t<Matrix_>
->
+template<typename Vector_, typename Matrix_, typename TangentSpace_>
 struct SDMM {
     static_assert(
         std::is_same_v<enoki::scalar_t<Vector_>, enoki::scalar_t<Matrix_>>
@@ -43,6 +39,7 @@ struct SDMM {
     using Scalar = enoki::value_t<Vector_>;
     using Vector = Vector_;
     using Matrix = Matrix_;
+    using TangentSpace = TangentSpace_;
     using Mask = enoki::mask_t<Scalar>;
 
     using ScalarExpr = enoki::expr_t<Scalar>;
@@ -67,14 +64,14 @@ struct SDMM {
 
     VectorExpr to_standard_normal(const Vector& point) const;
 
-    VectorExpr euclidian_log_map(const VectorS& embedded) const;
-
     // Make sure to update the ENOKI_STRUCT and ENOKI_STRUCT_SUPPORT
     // declarations when modifying these variables.
     Scalar weight;
-    Vector mean;
+    TangentSpace tangent_space;
     Matrix cov;
 
+    // TODO:
+    // Make struct Cholesky {};
     Matrix cov_sqrt;
     Scalar inv_cov_sqrt_det;
     Mask cov_is_psd;
@@ -83,42 +80,35 @@ struct SDMM {
         SDMM,
 
         weight,
-        mean,
+        tangent_space,
         cov,
+
         cov_sqrt,
         inv_cov_sqrt_det,
         cov_is_psd
     );
 };
 
-template<typename Vector_, typename Matrix_>
-auto SDMM<Vector_, Matrix_>::prepare() -> void {
+template<typename Vector_, typename Matrix_, typename TangentSpace_>
+auto SDMM<Vector_, Matrix_, TangentSpace_>::prepare() -> void {
     sdmm::linalg::cholesky(cov, cov_sqrt, cov_is_psd);
     inv_cov_sqrt_det = 1.f / enoki::hprod(enoki::diag(cov_sqrt));
     assert(enoki::all(cov_is_psd));
 }
 
-template<typename Vector_, typename Matrix_>
-auto SDMM<Vector_, Matrix_>::euclidian_log_map(
-    const VectorS& embedded
-) const -> VectorExpr {
-    return embedded - mean;
-}
-
-
-template<typename Vector_, typename Matrix_>
-auto SDMM<Vector_, Matrix_>::to_standard_normal(
+template<typename Vector_, typename Matrix_, typename TangentSpace_>
+auto SDMM<Vector_, Matrix_, TangentSpace_>::to_standard_normal(
     const Vector& point
 ) const -> VectorExpr {
     VectorExpr standardized;
     return sdmm::linalg::solve(cov_sqrt, point);
 }
 
-template<typename Vector_, typename Matrix_>
-auto SDMM<Vector_, Matrix_>::pdf_gaussian(
+template<typename Vector_, typename Matrix_, typename TangentSpace_>
+auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
     const VectorS& point, Scalar& pdf
 ) const -> void {
-    VectorExpr tangent = euclidian_log_map(point);
+    VectorExpr tangent = tangent_space.to(point);
     VectorExpr standardized = to_standard_normal(tangent);
     ScalarExpr squared_norm = enoki::hsum(standardized * standardized);
     pdf =
@@ -147,4 +137,14 @@ auto SDMM<Vector_, Matrix_>::pdf_gaussian(
 
 }
 
-ENOKI_STRUCT_SUPPORT(sdmm::SDMM, weight, mean, cov, cov_sqrt, inv_cov_sqrt_det, cov_is_psd)
+ENOKI_STRUCT_SUPPORT(
+    sdmm::SDMM,
+
+    weight,
+    tangent_space,
+    cov,
+    
+    cov_sqrt,
+    inv_cov_sqrt_det,
+    cov_is_psd
+);
