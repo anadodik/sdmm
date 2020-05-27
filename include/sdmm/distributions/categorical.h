@@ -15,33 +15,28 @@ struct Categorical {
     using Value = Value_;
     using Scalar = enoki::scalar_t<Value>;
     using Mask = enoki::mask_t<Value>;
-    using ValueOuter = typename Value::template ReplaceValue<Scalar>;
-    using BoolOuter = typename Value::template ReplaceValue<bool>;
-
-    using ValueExpr = enoki::expr_t<Value>;
-    using MaskExpr = enoki::mask_t<ValueExpr>;
-    using ValueOuterExpr = enoki::expr_t<ValueOuter>;
-    using BoolOuterExpr = enoki::expr_t<BoolOuter>;
+    using ValueOuter = sdmm::outer_type_t<Value, Scalar>;
+    using BoolOuter = sdmm::outer_type_t<Value, bool>;
 
     Value pmf;
     Value cdf;
 
-    BoolOuterExpr prepare();
-    void normalize_cdf(const ValueOuterExpr& inv_normalizer);
-    BoolOuterExpr is_valid();
+    BoolOuter prepare();
+    void normalize_cdf(const ValueOuter& inv_normalizer);
+    BoolOuter is_valid();
 
     ENOKI_STRUCT(Categorical, pmf, cdf);
 };
 
 template<typename Value_>
-[[nodiscard]] auto Categorical<Value_>::is_valid() -> BoolOuterExpr {
+[[nodiscard]] auto Categorical<Value_>::is_valid() -> BoolOuter {
     Mask zero_values = enoki::neq(pmf, 0.f);
-    BoolOuterExpr valid_pmf = false;
-    for(size_t i = 0; i < Mask::Size; ++i) {
-        valid_pmf.coeff(i) = enoki::any(zero_values.coeff(i));
+    BoolOuter valid_pmf = false;
+    for(size_t i = 0; i < enoki::array_size_v<BoolOuter>; ++i) {
+        coeff_safe(valid_pmf, i) = enoki::any(zero_values.coeff(i));
     }
     if(!enoki::all(valid_pmf)) {
-        enoki::bool_array_t<BoolOuterExpr> bool_array = valid_pmf;
+        enoki::bool_array_t<BoolOuter> bool_array = valid_pmf;
         spdlog::warn("Categorical::is_valid()={}.", bool_array);
     }
     return valid_pmf;
@@ -49,18 +44,18 @@ template<typename Value_>
 
 template<typename Value_>
 auto Categorical<Value_>::normalize_cdf(
-    const ValueOuterExpr& inv_normalizer
+    const ValueOuter& inv_normalizer
 ) -> void {
     cdf *= inv_normalizer;
 }
 
 template<typename Value_>
-[[nodiscard]] auto Categorical<Value_>::prepare() -> BoolOuterExpr {
-    // BoolOuterExpr valid = enoki::vectorize(
+[[nodiscard]] auto Categorical<Value_>::prepare() -> BoolOuter {
+    // BoolOuter valid = enoki::vectorize(
     //     VECTORIZE_WRAP_MEMBER(is_valid),
     //     *this
     // );
-    BoolOuterExpr valid = is_valid();
+    BoolOuter valid = is_valid();
     if(enoki::none(valid)) {
         return valid;
     }
@@ -71,11 +66,12 @@ template<typename Value_>
         enoki::slice(cdf, i) = enoki::slice(cdf, i - 1) + enoki::slice(pmf, i);
     }
 
-    ValueOuterExpr cdf_sum = enoki::slice(cdf, n_slices - 1);
-    ValueOuterExpr inv_normalizer = 1 / enoki::select(cdf_sum > 0.f, cdf_sum, 1.f);
+    ValueOuter cdf_sum = enoki::slice(cdf, n_slices - 1);
+    ValueOuter inv_normalizer = 1 / enoki::select(cdf_sum > 0.f, cdf_sum, 1.f);
 
     // This can be further optimized by
     // only iterating over cdfs which have non-zero sums.
+    // normalize_cdf(inv_normalizer);
     enoki::vectorize(
         VECTORIZE_WRAP_MEMBER(normalize_cdf),
         *this,

@@ -51,6 +51,48 @@ struct nested_packet<Value, std::enable_if_t<!enoki::is_dynamic_v<Value>>> {
 template<typename Value>
 using nested_packet_t = typename nested_packet<Value>::type;
 
+template<typename Value, typename New, typename Enable=void>
+struct outer_type {
+    using type = New;
+};
+
+template<typename Value, typename New>
+struct outer_type<
+    Value,
+    New,
+    std::enable_if_t<
+        enoki::is_array_v<Value> && (enoki::array_depth_v<Value> > 1)
+    >
+> {
+    using type = std::remove_reference_t<typename Value::template ReplaceValue<New>>;
+};
+
+template<typename Value, typename New>
+struct outer_type<
+    Value,
+    New,
+    std::enable_if_t<
+        !enoki::is_array_v<Value> ||
+        (enoki::is_array_v<Value> && enoki::array_depth_v<Value> <= 1)
+    >
+> {
+    using type = New;
+};
+
+template<typename Value, typename New>
+using outer_type_t = typename outer_type<std::remove_reference_t<Value>, New>::type;
+
+template<typename Value, std::enable_if_t<!enoki::is_array_v<Value>, int> = 0> 
+auto& coeff_safe(Value& value, [[maybe_unused]] size_t i) {
+    assert(i == 0);
+    return value;
+};
+
+template<typename Value, std::enable_if_t<enoki::is_array_v<Value>, int> = 0> 
+auto& coeff_safe(Value& value, size_t i) {
+    return value.coeff(i);
+};
+
 // Taken from Mitsuba2:
 template <typename Value_, size_t Size_>
 struct Vector : enoki::StaticArrayImpl<Value_, Size_, false, Vector<Value_, Size_>> {

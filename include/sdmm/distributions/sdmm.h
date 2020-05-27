@@ -10,6 +10,7 @@
 
 #include "sdmm/core/constants.h"
 #include "sdmm/core/utils.h"
+#include "sdmm/distributions/categorical.h"
 #include "sdmm/linalg/cholesky.h"
 #include "sdmm/spaces/euclidian.h"
 
@@ -56,19 +57,19 @@ struct SDMM {
 
     void prepare();
 
-    // void posterior(const VectorS& point, Value& posterior) const;
-
-    // void pdf(const VectorS& point, Scalar& pdf) const;
-    
     void pdf_gaussian(const VectorS& point, Scalar& pdf, Vector& tangent) const;
 
     void pdf_gaussian(const VectorS& point, Scalar& pdf) const;
+
+    void posterior(const VectorS& point, Scalar& posterior, Vector& tangent) const;
+
+    // void pdf(const VectorS& point, Scalar& pdf) const;
 
     VectorExpr to_standard_normal(const Vector& point) const;
 
     // Make sure to update the ENOKI_STRUCT and ENOKI_STRUCT_SUPPORT
     // declarations when modifying these variables.
-    Scalar weight;
+    Categorical<Scalar> weight;
     TangentSpace tangent_space;
     Matrix cov;
 
@@ -91,6 +92,7 @@ struct SDMM {
     );
 };
 
+// TODO: add Categorical::prepare()
 template<typename Vector_, typename Matrix_, typename TangentSpace_>
 auto SDMM<Vector_, Matrix_, TangentSpace_>::prepare() -> void {
     sdmm::linalg::cholesky(cov, cov_sqrt, cov_is_psd);
@@ -127,6 +129,15 @@ auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
     Vector tangent_ref = tangent;
     pdf_gaussian(point, pdf, tangent_ref);
 }
+
+template<typename Vector_, typename Matrix_, typename TangentSpace_>
+auto SDMM<Vector_, Matrix_, TangentSpace_>::posterior(
+    const VectorS& point, Scalar& posterior, Vector& tangent
+) const -> void {
+    pdf_gaussian(point, posterior, tangent);
+    posterior *= weight.pmf;
+}
+
 
 // template<typename Value, size_t MeanSize, size_t CovSize>
 // void SDMM<Value, MeanSize, CovSize>::pdf(
