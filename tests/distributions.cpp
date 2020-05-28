@@ -6,16 +6,15 @@
 
 #include "sdmm/distributions/categorical.h"
 #include "sdmm/distributions/sdmm.h"
+#include "sdmm/distributions/sdmm_conditioner.h"
 
 #include "utils.h"
 
 TEST_CASE("SDMM::pdf<float>") {
     using Value = float;
-    using TangentSpace = 
-        sdmm::EuclidianTangentSpace<
-            sdmm::Vector<Value, 2>,
-            sdmm::Vector<Value, 2>
-        >;
+    using TangentSpace = sdmm::EuclidianTangentSpace<
+        sdmm::Vector<Value, 2>, sdmm::Vector<Value, 2>
+    >;
     using SDMM = sdmm::SDMM<
         sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, TangentSpace
     >;
@@ -37,11 +36,9 @@ TEST_CASE("SDMM::pdf<float>") {
 
 TEST_CASE("SDMM::pdf<Array>") {
     using Value = enoki::Array<float, 2>;
-    using TangentSpace = 
-        sdmm::EuclidianTangentSpace<
-            sdmm::Vector<Value, 2>,
-            sdmm::Vector<Value, 2>
-        >;
+    using TangentSpace = sdmm::EuclidianTangentSpace<
+        sdmm::Vector<Value, 2>, sdmm::Vector<Value, 2>
+    >;
     using SDMM = sdmm::SDMM<
         sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, TangentSpace
     >;
@@ -81,11 +78,9 @@ TEST_CASE("SDMM::pdf<Array>") {
 TEST_CASE("SDMM::pdf<DynamicArray>") {
     using Packet = enoki::Packet<float, 2>;
     using Value = enoki::DynamicArray<Packet>;
-    using TangentSpace = 
-        sdmm::EuclidianTangentSpace<
-            sdmm::Vector<Value, 2>,
-            sdmm::Vector<Value, 2>
-        >;
+    using TangentSpace = sdmm::EuclidianTangentSpace<
+        sdmm::Vector<Value, 2>, sdmm::Vector<Value, 2>
+    >;
     using SDMM = sdmm::SDMM<
         sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, TangentSpace
     >;
@@ -184,6 +179,47 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
             0.8f * 0.0018674935212148857f
         });
         CHECK(approx_equals(posterior, expected_posterior));
+    }
+
+
+    SUBCASE("Conditioner") {
+        using JointTangentSpace = sdmm::EuclidianTangentSpace<
+            sdmm::Vector<Value, 2>, sdmm::Vector<Value, 2>
+        >;
+        using JointSDMM = sdmm::SDMM<
+            sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, JointTangentSpace
+        >;
+        using MarginalTangentSpace = sdmm::EuclidianTangentSpace<
+            sdmm::Vector<Value, 1>, sdmm::Vector<Value, 1>
+        >;
+        using MarginalSDMM = sdmm::SDMM<
+            sdmm::Vector<Value, 1>, sdmm::Matrix<Value, 1>, MarginalTangentSpace
+        >;
+        using ConditionalTangentSpace = sdmm::EuclidianTangentSpace<
+            sdmm::Vector<Value, 1>, sdmm::Vector<Value, 1>
+        >;
+        using ConditionalSDMM = sdmm::SDMM<
+            sdmm::Vector<Value, 1>, sdmm::Matrix<Value, 1>, ConditionalTangentSpace
+        >;
+
+        using Conditioner = sdmm::SDMMConditioner<
+            JointSDMM, MarginalSDMM, ConditionalSDMM
+        >;
+        Conditioner conditioner;
+        enoki::set_slices(conditioner, enoki::slices(distribution));
+        enoki::vectorize(
+            VECTORIZE_WRAP(create_marginal),
+            distribution,
+            conditioner.marginal
+        );
+
+        enoki::vectorize_safe(
+            VECTORIZE_WRAP_MEMBER(prepare),
+            conditioner,
+            distribution
+        );
+
+        create_marginal(distribution, conditioner.marginal);
     }
 }
 

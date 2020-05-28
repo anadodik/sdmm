@@ -62,6 +62,7 @@ void test_cholesky() {
         for(size_t mat_i = 0; mat_i < ArraySize; ++mat_i) {
             Eigen::LLT<Matrix3f> llt(eigen_mats[mat_i]);
             Matrix3f eigen_result = llt.matrixL();
+            // spdlog::info("\n{}", eigen_result.inverse() * eigen_result);
             approx_equals_lower_tri(
                 enoki_result,
                 eigen_result
@@ -108,16 +109,28 @@ void test_cholesky() {
         Vector b_check = enoki_result * x;
         CHECK(approx_equals(b, b_check));
     }
+
+    SUBCASE("Computing inverse.") {
+        Matrix inverse = sdmm::linalg::inverse_lower_tri(enoki_result);
+        Matrix expected = Matrix{
+            Value(1), Value(0), Value(0),
+            Value(0), Value(1), Value(0),
+            Value(0), Value(0), Value(1)
+        };
+        CHECK(approx_equals(enoki_result * inverse, expected));
+        // CHECK(approx_equals(enoki_mat * inverse * enoki::transpose(inverse), expected));
+        // spdlog::info("{}", enoki_result * inverse);
+    }
 }
 
-TEST_CASE("sdmm::linalg::choleky<Packet>") {
+TEST_CASE("sdmm::linalg::cholesky<Packet>") {
     static constexpr size_t ArraySize = 2;
     using Packet = enoki::Packet<float, ArraySize>;
 
     test_cholesky<Packet>();
 }
 
-TEST_CASE("sdmm::linalg::choleky<DynamicArray>") {
+TEST_CASE("sdmm::linalg::cholesky<DynamicArray>") {
     static constexpr size_t ArraySize = 2;
     using Packet = enoki::Packet<float, ArraySize>;
     using DynamicArray = enoki::DynamicArray<Packet>;
