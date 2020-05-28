@@ -30,8 +30,19 @@ struct Matrix : enoki::StaticArrayImpl<enoki::Array<Value_, Rows_>, Cols_, false
     using MaskType = enoki::Mask<enoki::mask_t<Column>, Cols_>;
 
     template <typename T> using ReplaceValue = Matrix<enoki::value_t<T>, Rows_, Cols_>;
+    template <size_t R, size_t C> using ReplaceSize = Matrix<enoki::value_t<Value>, R, C>;
 
     Matrix() = default;
+
+    /// Initialize from a compatible matrix
+    template <
+        typename Value2,
+        size_t Rows2,
+        size_t Cols2,
+        enoki::enable_if_t<Rows2 == Rows_ && Cols2 == Cols_> = 0
+    >
+    ENOKI_INLINE Matrix(const Matrix<Value2, Rows2, Cols2> &m)
+     : Base(m) { }
 
     /// Initialize the matrix from a list of columns
     template <typename... Args, enoki::enable_if_t<sizeof...(Args) == Cols_ &&

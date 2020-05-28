@@ -17,6 +17,9 @@
 namespace sdmm {
 
 template<typename T>
+using tangent_space_t = typename T::TangentSpace;
+
+template<typename T>
 using vector_t = typename T::Vector;
 
 template<typename T>

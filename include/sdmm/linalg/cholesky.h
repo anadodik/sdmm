@@ -77,8 +77,6 @@ auto inverse_lower_tri(const Matrix& cholesky) -> MatrixExpr {
         e.coeff(r) = 1;
         VectorExpr inv_col = linalg::solve(cholesky, e);
         inverse.col(r) = inv_col;
-        // VectorExpr b_check = cholesky * inv_col;
-        // spdlog::info("solution={}, b_check={}", inv_col, b_check);
     }
     return inverse;
 }

@@ -97,7 +97,7 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
         Value(0.5, 0), Value(1.4, 0.1)
     );
 
-    auto success = distribution.weight.prepare();
+    CHECK(distribution.weight.prepare());
     enoki::vectorize(
         VECTORIZE_WRAP_MEMBER(prepare),
         distribution
@@ -184,16 +184,16 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
 
     SUBCASE("Conditioner") {
         using JointTangentSpace = sdmm::EuclidianTangentSpace<
-            sdmm::Vector<Value, 2>, sdmm::Vector<Value, 2>
+            sdmm::Vector<Value, 3>, sdmm::Vector<Value, 3>
         >;
         using JointSDMM = sdmm::SDMM<
-            sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, JointTangentSpace
+            sdmm::Vector<Value, 3>, sdmm::Matrix<Value, 3>, JointTangentSpace
         >;
         using MarginalTangentSpace = sdmm::EuclidianTangentSpace<
-            sdmm::Vector<Value, 1>, sdmm::Vector<Value, 1>
+            sdmm::Vector<Value, 2>, sdmm::Vector<Value, 2>
         >;
         using MarginalSDMM = sdmm::SDMM<
-            sdmm::Vector<Value, 1>, sdmm::Matrix<Value, 1>, MarginalTangentSpace
+            sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, MarginalTangentSpace
         >;
         using ConditionalTangentSpace = sdmm::EuclidianTangentSpace<
             sdmm::Vector<Value, 1>, sdmm::Vector<Value, 1>
@@ -205,6 +205,25 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
         using Conditioner = sdmm::SDMMConditioner<
             JointSDMM, MarginalSDMM, ConditionalSDMM
         >;
+        JointSDMM distribution;
+        enoki::set_slices(distribution, 2);
+        distribution.weight.pmf = Value(0.2, 0.8);
+        distribution.tangent_space.set_mean(
+            sdmm::vector_t<JointSDMM>(
+                Value(0, 0), Value(1, 1), Value(2, 2)
+            )
+        );
+        distribution.cov = sdmm::matrix_t<JointSDMM>(
+            Value(3, 2), Value(0.5, 0), Value(0.1, 0.1),
+            Value(0.5, 0), Value(1.4, 0.1), Value(0, 0),
+            Value(0.1, 0.1), Value(0, 0), Value(1, 1)
+        );
+
+        CHECK(enoki::all(distribution.weight.prepare()));
+        enoki::vectorize(
+            VECTORIZE_WRAP_MEMBER(prepare),
+            distribution
+        );
         Conditioner conditioner;
         enoki::set_slices(conditioner, enoki::slices(distribution));
         enoki::vectorize(
