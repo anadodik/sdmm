@@ -20,13 +20,20 @@ template<typename T>
 using vector_t = typename T::Vector;
 
 template<typename T>
-using matrix_t = typename T::Matrix;
+using vector_expr_t = typename T::VectorExpr;
 
 template<typename T>
 using vector_s_t = typename T::VectorS;
 
 template<typename T>
+using matrix_t = typename T::Matrix;
+
+template<typename T>
+using matrix_expr_t = typename T::MatrixExpr;
+
+template<typename T>
 using matrix_s_t = typename T::MatrixS;
+
 
 template<typename Vector_, typename Matrix_, typename TangentSpace_>
 struct SDMM {
@@ -55,17 +62,17 @@ struct SDMM {
 
     using Packet = nested_packet_t<Scalar>;
 
-    void prepare();
+    auto prepare() -> void;
 
-    void pdf_gaussian(const VectorS& point, Scalar& pdf, Vector& tangent) const;
+    auto pdf_gaussian(const VectorS& point, Scalar& pdf, Vector& tangent) const -> void;
 
-    void pdf_gaussian(const VectorS& point, Scalar& pdf) const;
+    auto pdf_gaussian(const VectorS& point, Scalar& pdf) const -> void;
 
-    void posterior(const VectorS& point, Scalar& posterior, Vector& tangent) const;
+    auto posterior(const VectorS& point, Scalar& posterior, Vector& tangent) const -> void;
 
-    // void pdf(const VectorS& point, Scalar& pdf) const;
+    // auto pdf(const VectorS& point, Scalar& pdf) const -> void;
 
-    VectorExpr to_standard_normal(const Vector& point) const;
+    auto to_standard_normal(const Vector& point) const -> VectorExpr;
 
     // Make sure to update the ENOKI_STRUCT and ENOKI_STRUCT_SUPPORT
     // declarations when modifying these variables.
