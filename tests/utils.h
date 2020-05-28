@@ -6,9 +6,10 @@
 
 template<typename T, typename U>
 bool approx_equals(const T& first, const U& second) {
+    using E = enoki::expr_t<T, U>;
     return enoki::all_nested(
         enoki::abs(first - second) <=
-        sdmm::epsilon<enoki::scalar_t<T>>
+        enoki::full<E>(sdmm::epsilon<enoki::scalar_t<T>>)
     );
 }
 

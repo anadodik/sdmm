@@ -6,6 +6,8 @@
 #include <enoki/array.h>
 #include <enoki/dynamic.h>
 
+#include "sdmm/linalg/matrix.h"
+
 #define VECTORIZE_WRAP(FUNC_NAME) [](auto&&... params) { FUNC_NAME(params...); }
 #define VECTORIZE_WRAP_OUTPUT(FUNC_NAME) [](auto&& output, auto&&... params) { output = FUNC_NAME(params...); }
 #define VECTORIZE_WRAP_MEMBER(FUNC_NAME) [](auto&& obj, [[maybe_unused]] auto&&... params) { return obj.FUNC_NAME(params...); }
@@ -104,11 +106,13 @@ struct Vector : enoki::StaticArrayImpl<Value_, Size_, false, Vector<Value_, Size
     using ArrayType = Vector;
     using MaskType = enoki::Mask<Value_, Size_>;
 
+    static constexpr bool IsMatrix = false;
+
     ENOKI_ARRAY_IMPORT(Base, Vector)
 };
 
-template<typename Value, size_t Size>
-using Matrix = enoki::Matrix<Value, Size>;
+template<typename Value, size_t Rows, size_t Cols=Rows>
+using Matrix = sdmm::linalg::Matrix<Value, Rows, Cols>;
 
 // https://stackoverflow.com/questions/81870/is-it-possible-to-print-a-variables-type-in-standard-c
 template <class T>

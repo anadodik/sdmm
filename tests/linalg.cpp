@@ -17,7 +17,7 @@ void test_cholesky() {
     using Matrix3f = Eigen::Matrix<float, MatSize, MatSize>;
 
     using Vector = sdmm::Vector<Value, MatSize>;
-    using Matrix = sdmm::Matrix<Value, MatSize>;
+    using Matrix = sdmm::Matrix<Value, MatSize, MatSize>;
     using Mask = enoki::mask_t<Value>;
 
     std::array<Matrix3f, ArraySize> eigen_mats;

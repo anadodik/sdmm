@@ -12,11 +12,11 @@ namespace sdmm::linalg {
 
 template<typename Value_, size_t Size, typename Value=std::decay_t<Value_>>
 void cholesky(
-    const enoki::Matrix<Value_, Size>& in,
-    enoki::Matrix<Value_, Size>& out,
+    const sdmm::Matrix<Value_, Size>& in,
+    sdmm::Matrix<Value_, Size>& out,
     enoki::mask_t<Value_>& is_psd
 ) {
-    using Matrix = enoki::Matrix<Value, Size>;
+    using Matrix = sdmm::Matrix<Value, Size>;
     using Mask = enoki::mask_t<Value>;
 
     out = enoki::zero<Matrix>();

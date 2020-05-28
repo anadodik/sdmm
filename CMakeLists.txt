@@ -54,6 +54,7 @@ add_executable(
     tests/tests.cpp
     tests/linalg.cpp
     tests/distributions.cpp
+    tests/matrix.cpp
 )
 target_include_directories(tests PRIVATE tests)
 target_compile_features(tests PRIVATE cxx_std_17)
