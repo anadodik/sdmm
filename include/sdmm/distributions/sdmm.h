@@ -67,11 +67,14 @@ struct SDMM {
 
     auto prepare() -> void;
 
-    auto pdf_gaussian(const VectorS& point, Scalar& pdf, Vector& tangent) const -> void;
+    template<typename VectorIn>
+    auto pdf_gaussian(const VectorIn& point, Scalar& pdf, Vector& tangent) const -> void;
 
-    auto pdf_gaussian(const VectorS& point, Scalar& pdf) const -> void;
+    template<typename VectorIn>
+    auto pdf_gaussian(const VectorIn& point, Scalar& pdf) const -> void;
 
-    auto posterior(const VectorS& point, Scalar& posterior, Vector& tangent) const -> void;
+    template<typename VectorIn>
+    auto posterior(const VectorIn& point, Scalar& posterior, Vector& tangent) const -> void;
 
     // auto pdf(const VectorS& point, Scalar& pdf) const -> void;
 
@@ -119,8 +122,9 @@ auto SDMM<Vector_, Matrix_, TangentSpace_>::to_standard_normal(
 }
 
 template<typename Vector_, typename Matrix_, typename TangentSpace_>
+template<typename VectorIn>
 auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
-    const VectorS& point, Scalar& pdf, Vector& tangent
+    const VectorIn& point, Scalar& pdf, Vector& tangent
 ) const -> void {
     tangent = tangent_space.to(point);
     VectorExpr standardized = to_standard_normal(tangent);
@@ -132,8 +136,9 @@ auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
 }
 
 template<typename Vector_, typename Matrix_, typename TangentSpace_>
+template<typename VectorIn>
 auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
-    const VectorS& point, Scalar& pdf
+    const VectorIn& point, Scalar& pdf
 ) const -> void {
     VectorExpr tangent;
     Vector tangent_ref = tangent;
@@ -141,8 +146,9 @@ auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
 }
 
 template<typename Vector_, typename Matrix_, typename TangentSpace_>
+template<typename VectorIn>
 auto SDMM<Vector_, Matrix_, TangentSpace_>::posterior(
-    const VectorS& point, Scalar& posterior, Vector& tangent
+    const VectorIn& point, Scalar& posterior, Vector& tangent
 ) const -> void {
     pdf_gaussian(point, posterior, tangent);
     posterior *= weight.pmf;

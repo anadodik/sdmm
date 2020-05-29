@@ -31,12 +31,21 @@ struct EuclidianTangentSpace {
 
     using Packet = nested_packet_t<Scalar>;
 
-    TangentExpr to(const EmbeddedS& embedded) const { return embedded - mean; }
+    // TangentExpr to(const EmbeddedS& embedded) const { return embedded - mean; }
+    // EmbeddedExpr from(const TangentS& tangent) const { return tangent + mean; }
 
-    EmbeddedExpr from(const TangentS& tangent) const { return tangent + mean; }
+    template<typename EmbeddedIn>
+    auto to(const EmbeddedIn& embedded) const -> TangentExpr {
+        return embedded - mean;
+    }
 
-    void set_mean(const Embedded& mean_) { mean = mean_; }
-    void set_mean(Embedded&& mean_) { mean = std::move(mean_); }
+    template<typename TangentIn>
+    auto from(const TangentIn& tangent) const -> EmbeddedExpr {
+        return tangent + mean;
+    }
+
+    auto set_mean(const Embedded& mean_) -> void { mean = mean_; }
+    auto set_mean(Embedded&& mean_) -> void { mean = std::move(mean_); }
 
     Embedded mean;
 

@@ -25,6 +25,7 @@ auto create_marginal(const Joint& joint, Marginal& marginal) -> void {
     marginal.prepare();
 }
 
+// TODO: rename to SDMMDecomposition?
 template<typename Joint_, typename Marginal_, typename Conditional_>
 struct SDMMConditioner {
     using Joint = Joint_;
@@ -46,7 +47,7 @@ struct SDMMConditioner {
     >;
 
     auto prepare(const Joint& joint) -> void;
-    auto condition(const MarginalVectorS& point) -> void;
+    auto create_conditional(const MarginalVectorS& point) -> void;
 
     Marginal marginal;
     Conditional conditional;
@@ -95,10 +96,20 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::prepare(
 }
 
 template<typename Joint_, typename Marginal_, typename Conditional_>
-auto SDMMConditioner<Joint_, Marginal_, Conditional_>::condition(
+auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional(
     const MarginalVectorS& point
 ) -> void {
-    conditional.tangent_space.mean.set_mean(
+    spdlog::info("EmbeddedExpr={}, EmbeddedS={}, point={}",
+        type_name<typename decltype(tangent_space)::EmbeddedExpr>(),
+        type_name<typename decltype(tangent_space)::EmbeddedS>(),
+        type_name<decltype(point)>()
+    );
+    spdlog::info("m.ts.to={}, prod={}, from={}",
+        type_name<decltype(marginal.tangent_space.to(point))>(),
+        type_name<decltype(mean_transform * marginal.tangent_space.to(point))>(),
+        type_name<decltype(tangent_space.from(mean_transform * marginal.tangent_space.to(point)))>()
+    );
+    conditional.tangent_space.set_mean(
         tangent_space.from(mean_transform * marginal.tangent_space.to(point))
     );
 }

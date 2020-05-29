@@ -226,6 +226,8 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
         );
         Conditioner conditioner;
         enoki::set_slices(conditioner, enoki::slices(distribution));
+        
+        create_marginal(distribution, conditioner.marginal);
         enoki::vectorize(
             VECTORIZE_WRAP(create_marginal),
             distribution,
@@ -238,7 +240,12 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
             distribution
         );
 
-        create_marginal(distribution, conditioner.marginal);
+        sdmm::vector_s_t<MarginalSDMM> point({1, 2});
+        enoki::vectorize(
+            VECTORIZE_WRAP_MEMBER(create_conditional),
+            conditioner,
+            point
+        );
     }
 }
 
