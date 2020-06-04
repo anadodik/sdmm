@@ -5,6 +5,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(sdmm LANGUAGES CXX)
 
+if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting build type to 'Release' as none was specified.")
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release"
+    "MinSizeRel" "RelWithDebInfo")
+endif()
+
 if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
@@ -15,7 +22,7 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(WARNING_FLAGS "-Wall -Wextra -Wfloat-conversion -Wno-deprecated-declarations")
     set(MATH_FLAGS "-funsafe-math-optimizations -fno-math-errno -fno-signaling-nans -fno-rounding-math")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g ${WARNING_FLAGS} ${MATH_FLAGS} -march=native")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g ${WARNING_FLAGS} ${MATH_FLAGS}")
 else ()
     MESSAGE(ERROR "Compiler not supported!")
 endif()
@@ -26,6 +33,8 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(fmt REQUIRED)
 
 add_subdirectory(ext/enoki)
+enoki_set_compile_flags()
+enoki_set_native_flags()
 add_subdirectory(ext/doctest)
 
 add_library(sdmm INTERFACE)
@@ -55,10 +64,22 @@ add_executable(
     tests/linalg.cpp
     tests/distributions.cpp
     tests/matrix.cpp
+    tests/minimal.cpp
 )
-target_include_directories(tests PRIVATE tests)
 target_compile_features(tests PRIVATE cxx_std_17)
+target_include_directories(tests PRIVATE tests)
 target_link_libraries(tests PRIVATE sdmm Eigen3::Eigen doctest::doctest)
+
+find_package(benchmark REQUIRED)
+
+add_executable(
+    benchmarks
+
+    benchmarks/distributions.cpp
+)
+target_compile_features(benchmarks PRIVATE cxx_std_17)
+target_include_directories(benchmarks PRIVATE benchmark::benchmark)
+target_link_libraries(benchmarks PRIVATE sdmm benchmark::benchmark)
 
 # find_package(OpenMP)
 # 

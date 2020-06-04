@@ -23,7 +23,7 @@ TEST_CASE("SDMM::pdf<float>") {
     distribution.weight.pmf = 1;
     distribution.tangent_space.set_mean(sdmm::vector_t<SDMM>(0));
     distribution.cov = enoki::diag<sdmm::matrix_t<SDMM>>({1, 2});;
-    distribution.prepare();
+    distribution.prepare_cov();
 
     sdmm::vector_s_t<SDMM> point({1, 2});
     Value pdf(0);
@@ -49,7 +49,7 @@ TEST_CASE("SDMM::pdf<Array>") {
         Value(3, 2), Value(0.5, 0),
         Value(0.5, 0), Value(1.4, 0.1)
     );
-    distribution.prepare();
+    CHECK(sdmm::prepare(distribution));
 
     Value pdf(0);
     SUBCASE("Calculating pdf for point={1, 2}.") {
@@ -97,11 +97,7 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
         Value(0.5, 0), Value(1.4, 0.1)
     );
 
-    CHECK(distribution.weight.prepare());
-    enoki::vectorize(
-        VECTORIZE_WRAP_MEMBER(prepare),
-        distribution
-    );
+    CHECK(sdmm::prepare(distribution));
 
     sdmm::EuclidianTangentSpace<sdmm::Vector<Value, 3>, sdmm::Vector<Value, 3>> tangent_space;
 
@@ -184,10 +180,10 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
 
     SUBCASE("Conditioner") {
         using JointTangentSpace = sdmm::EuclidianTangentSpace<
-            sdmm::Vector<Value, 3>, sdmm::Vector<Value, 3>
+            sdmm::Vector<Value, 4>, sdmm::Vector<Value, 4>
         >;
         using JointSDMM = sdmm::SDMM<
-            sdmm::Vector<Value, 3>, sdmm::Matrix<Value, 3>, JointTangentSpace
+            sdmm::Vector<Value, 4>, sdmm::Matrix<Value, 4>, JointTangentSpace
         >;
         using MarginalTangentSpace = sdmm::EuclidianTangentSpace<
             sdmm::Vector<Value, 2>, sdmm::Vector<Value, 2>
@@ -196,10 +192,10 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
             sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, MarginalTangentSpace
         >;
         using ConditionalTangentSpace = sdmm::EuclidianTangentSpace<
-            sdmm::Vector<Value, 1>, sdmm::Vector<Value, 1>
+            sdmm::Vector<Value, 2>, sdmm::Vector<Value, 2>
         >;
         using ConditionalSDMM = sdmm::SDMM<
-            sdmm::Vector<Value, 1>, sdmm::Matrix<Value, 1>, ConditionalTangentSpace
+            sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, ConditionalTangentSpace
         >;
 
         using Conditioner = sdmm::SDMMConditioner<
@@ -210,24 +206,20 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
         distribution.weight.pmf = Value(0.2, 0.8);
         distribution.tangent_space.set_mean(
             sdmm::vector_t<JointSDMM>(
-                Value(0, 0), Value(1, 1), Value(2, 2)
+                Value(0, 0), Value(1, 1), Value(2, 2), Value(-1, 1)
             )
         );
         distribution.cov = sdmm::matrix_t<JointSDMM>(
-            Value(3, 2), Value(0.5, 0), Value(0.1, 0.1),
-            Value(0.5, 0), Value(1.4, 0.1), Value(0, 0),
-            Value(0.1, 0.1), Value(0, 0), Value(1, 1)
+            Value(3, 2), Value(0.5, 0), Value(0.1, 0.1), Value(0.4, 0.4),
+            Value(0.5, 0), Value(1.4, 0.5), Value(0, 0), Value(0.2, 0.2),
+            Value(0.1, 0.1), Value(0, 0), Value(1, 1), Value(0.2, 0.2),
+            Value(0.4, 0.4), Value(0.2, 0.2), Value(0.2, 0.2), Value(3, 3)
         );
 
-        CHECK(enoki::all(distribution.weight.prepare()));
-        enoki::vectorize(
-            VECTORIZE_WRAP_MEMBER(prepare),
-            distribution
-        );
+        CHECK(sdmm::prepare(distribution));
         Conditioner conditioner;
         enoki::set_slices(conditioner, enoki::slices(distribution));
         
-        create_marginal(distribution, conditioner.marginal);
         enoki::vectorize(
             VECTORIZE_WRAP(create_marginal),
             distribution,
@@ -235,17 +227,41 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
         );
 
         enoki::vectorize_safe(
-            VECTORIZE_WRAP_MEMBER(prepare),
+            VECTORIZE_WRAP_MEMBER(prepare_vectorized),
             conditioner,
             distribution
         );
 
+        typename ConditionalSDMM::Matrix expected_cov{
+            Value(0.99645569620253160447, 0.99499999999999999556),
+            Value(0.18835443037974683444, 0.17999999999999999333),
+            Value(0.18835443037974683444, 0.17999999999999999333),
+            Value(2.93316455696202549319, 2.83999999999999985789)
+        };
+
+        CHECK(enoki::slice(expected_cov, 0) == enoki::slice(conditioner.conditional.cov, 0));
+        CHECK(enoki::slice(expected_cov, 1) == enoki::slice(conditioner.conditional.cov, 1));
+
         sdmm::vector_s_t<MarginalSDMM> point({1, 2});
         enoki::vectorize(
-            VECTORIZE_WRAP_MEMBER(create_conditional),
+            VECTORIZE_WRAP_MEMBER(create_conditional_vectorized),
             conditioner,
             point
         );
+        CHECK(conditioner.conditional.weight.prepare());
+
+        sdmm::prepare(conditioner, distribution);
+        sdmm::create_conditional(conditioner, point);
+
+        CHECK(enoki::slice(expected_cov, 0) == enoki::slice(conditioner.conditional.cov, 0));
+        CHECK(enoki::slice(expected_cov, 1) == enoki::slice(conditioner.conditional.cov, 1));
+
+        typename ConditionalSDMM::Vector expected_mean{
+            Value(2.02278481012658, 2.05000000000000),
+            Value(-0.78227848101265, 1.60000000000000)
+        };
+        CHECK(enoki::slice(expected_mean, 0) == enoki::slice(conditioner.conditional.tangent_space.mean, 0));
+        CHECK(enoki::slice(expected_mean, 1) == enoki::slice(conditioner.conditional.tangent_space.mean, 1));
     }
 }
 

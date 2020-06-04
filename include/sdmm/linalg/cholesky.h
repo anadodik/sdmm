@@ -11,7 +11,7 @@
 namespace sdmm::linalg {
 
 template<typename Value_, size_t Size, typename Value=std::decay_t<Value_>>
-void cholesky(
+inline void cholesky(
     const sdmm::Matrix<Value_, Size>& in,
     sdmm::Matrix<Value_, Size>& out,
     enoki::mask_t<Value_>& is_psd
@@ -44,10 +44,10 @@ template<
     typename ValueLHS = enoki::expr_t<ValueLHS_>,
     typename ValueRHS = enoki::expr_t<ValueRHS_>
 >
-Vector<ValueLHS, Size> solve(
+inline auto solve(
     const Matrix<ValueLHS_, Size>& L,
     const Vector<ValueRHS_, Size>& b
-) {
+) -> Vector<ValueLHS, Size> {
     Vector<ValueLHS, Size> x;
     x[0] = b[0] / L(0, 0);
     for(size_t r = 1; r < Size; ++r) {
@@ -62,7 +62,7 @@ Vector<ValueLHS, Size> solve(
 }
 
 template<typename Matrix, typename MatrixExpr=enoki::expr_t<Matrix>>
-auto inverse_lower_tri(const Matrix& cholesky) -> MatrixExpr {
+inline auto inverse_lower_tri(const Matrix& cholesky) -> MatrixExpr {
     using Scalar = enoki::value_t<enoki::column_t<Matrix>>;
     using ScalarS = enoki::scalar_t<Scalar>;
     using VectorS = sdmm::Vector<ScalarS, Matrix::Rows>;

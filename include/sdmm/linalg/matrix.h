@@ -12,6 +12,7 @@ template <typename Value_, size_t Rows_, size_t Cols_=Rows_>
 struct Matrix : enoki::StaticArrayImpl<enoki::Array<Value_, Rows_>, Cols_, false, Matrix<Value_, Rows_, Cols_>> {
     static constexpr size_t Rows = Rows_;
     static constexpr size_t Cols = Cols_;
+    static_assert(Rows > 1 && Cols > 1);
 
     using Entry = Value_;
     using Column = enoki::Array<Entry, Rows_>;
@@ -44,13 +45,27 @@ struct Matrix : enoki::StaticArrayImpl<enoki::Array<Value_, Rows_>, Cols_, false
     ENOKI_INLINE Matrix(const Matrix<Value2, Rows2, Cols2> &m)
      : Base(m) { }
 
+    template <typename T, enoki::enable_if_t<(enoki::array_depth_v<T> <= Base::Depth - 2)> = 0,
+                          enoki::enable_if_not_matrix_t<T> = 0>
+    ENOKI_INLINE Matrix(T&& v) {
+        for (size_t i = 0; i < Size; ++i) {
+            coeff(i) = enoki::zero<Column>();
+            coeff(i, i) = v;
+        }
+    }
+
+    template <typename T, enoki::enable_if_t<(enoki::array_depth_v<T> == Base::Depth)> = 0,
+                          enoki::enable_if_not_matrix_t<T> = 0>
+    ENOKI_INLINE Matrix(T&& v) : Base(std::forward<T>(v)) { }
+
     /// Initialize the matrix from a list of columns
     template <typename... Args, enoki::enable_if_t<sizeof...(Args) == Cols_ &&
               std::conjunction_v<std::is_constructible<Column, Args>...>> = 0>
-    ENOKI_INLINE Matrix(const Args&... args) : Base(args...) { }
+    ENOKI_INLINE Matrix(Args&&... args) : Base(std::forward<Args>(args)...) { }
 
     /// Initialize the matrix from a list of entries in row-major order
     template <typename... Args, enoki::enable_if_t<sizeof...(Args) == Cols_ * Rows_ &&
+              sizeof...(Args) != Cols_  &&
               std::conjunction_v<std::is_constructible<Entry, Args>...>> = 0>
     ENOKI_INLINE Matrix(const Args&... args) {
         alignas(alignof(Column)) Entry values[sizeof...(Args)] = { Entry(args)... };

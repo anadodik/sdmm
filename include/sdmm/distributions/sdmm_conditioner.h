@@ -5,7 +5,7 @@
 namespace sdmm {
 
 template<typename Joint, typename Marginal>
-auto create_marginal(const Joint& joint, Marginal& marginal) -> void {
+inline auto create_marginal(const Joint& joint, Marginal& marginal) -> void {
     static constexpr size_t MarginalSize = Marginal::CovSize;
     using MarginalTangentSpace = tangent_space_t<Marginal>;
     marginal.weight.pmf = joint.weight.pmf;
@@ -22,7 +22,7 @@ auto create_marginal(const Joint& joint, Marginal& marginal) -> void {
         mean.coeff(r) = joint.tangent_space.mean.coeff(r);
     }
     marginal.tangent_space.set_mean(mean);
-    marginal.prepare();
+    marginal.prepare_cov();
 }
 
 // TODO: rename to SDMMDecomposition?
@@ -45,25 +45,51 @@ struct SDMMConditioner {
     using MeanTransformMatrix = typename JointMatrix::template ReplaceSize<
         ConditionalSize, MarginalSize
     >;
+    using MarginalVector = typename Marginal::Vector;
 
-    auto prepare(const Joint& joint) -> void;
-    auto create_conditional(const MarginalVectorS& point) -> void;
+    auto prepare_vectorized(const Joint& joint) -> void;
+    auto create_conditional_vectorized(const MarginalVectorS& point) -> void;
 
     Marginal marginal;
     Conditional conditional;
+
     MeanTransformMatrix mean_transform;
     ConditionalTangentSpace tangent_space;
+    MarginalVector marginal_tangents;
 
-    ENOKI_STRUCT(SDMMConditioner, marginal, conditional, mean_transform, tangent_space);
+    ENOKI_STRUCT(SDMMConditioner, marginal, conditional, mean_transform, tangent_space, marginal_tangents);
 };
 
+template<typename Conditioner>
+inline auto prepare(
+    // cannot declare joint as const because enoki complains
+    Conditioner& conditioner, typename Conditioner::Joint& joint
+) -> void {
+    enoki::vectorize_safe(
+        VECTORIZE_WRAP_MEMBER(prepare_vectorized), std::forward<Conditioner>(conditioner), joint
+    );
+    assert(conditioner.marginal.weight.prepare());
+}
+
+template<typename Conditioner>
+inline auto create_conditional(
+    // cannot declare point as const because enoki complains
+    Conditioner& conditioner, typename Conditioner::MarginalVectorS& point
+) -> void {
+    enoki::vectorize_safe(
+        VECTORIZE_WRAP_MEMBER(create_conditional_vectorized), conditioner, point
+    );
+    assert(conditioner.conditional.weight.prepare());
+}
+
 template<typename Joint_, typename Marginal_, typename Conditional_>
-auto SDMMConditioner<Joint_, Marginal_, Conditional_>::prepare(
+auto SDMMConditioner<Joint_, Marginal_, Conditional_>::prepare_vectorized(
     const Joint_& joint
 ) -> void {
     create_marginal(joint, marginal);
-    
-    matrix_expr_t<Marginal> cov_aa_sqrt_inv = inverse_lower_tri(marginal.cov);
+    spdlog::debug("cov_aa_sqrt={}", marginal.cov_sqrt);
+    matrix_expr_t<Marginal> cov_aa_sqrt_inv = inverse_lower_tri(marginal.cov_sqrt);
+    spdlog::debug("cov_aa_sqrt_inv={}", cov_aa_sqrt_inv);
 
     matrix_expr_t<Conditional> cov_bb;
     for(size_t r = MarginalSize; r < JointSize; ++r) {
@@ -71,6 +97,7 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::prepare(
             cov_bb(r - MarginalSize, c - MarginalSize) = joint.cov(r, c);
         }
     }
+    spdlog::debug("cov_bb={}", cov_bb);
 
     typename tangent_space_t<Conditional>::EmbeddedExpr mean_b;
     for(
@@ -81,6 +108,7 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::prepare(
         mean_b.coeff(r - MarginalSize) = joint.tangent_space.mean.coeff(r);
     }
     tangent_space.set_mean(mean_b);
+    spdlog::debug("tangent_space.mean={}", tangent_space.mean);
 
     typename matrix_expr_t<Joint>::template ReplaceSize<ConditionalSize, MarginalSize> cov_ba;
     typename matrix_expr_t<Joint>::template ReplaceSize<MarginalSize, ConditionalSize> cov_ab;
@@ -90,30 +118,31 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::prepare(
             cov_ab(c, r - MarginalSize) = joint.cov(r, c);
         }
     }
+    spdlog::debug("cov_aa={}", marginal.cov);
+    spdlog::debug("cov_ab={}", cov_ab);
+    spdlog::debug("cov_ba={}", cov_ba);
     auto aa_sqrt_inv_ab = cov_aa_sqrt_inv * cov_ab;
+    spdlog::debug("aa_sqrt_inv_ab={}", aa_sqrt_inv_ab);
     conditional.cov = cov_bb - linalg::transpose(aa_sqrt_inv_ab) * aa_sqrt_inv_ab;
-    mean_transform = cov_ba * cov_aa_sqrt_inv * enoki::transpose(cov_aa_sqrt_inv);
+    spdlog::debug("aa^-1={}", linalg::transpose(cov_aa_sqrt_inv) * cov_aa_sqrt_inv);
+    spdlog::debug("ba*aa^-1*ab={}", linalg::transpose(aa_sqrt_inv_ab) * aa_sqrt_inv_ab);
+    spdlog::debug("conditional.cov={}", conditional.cov);
+    mean_transform = cov_ba * enoki::transpose(cov_aa_sqrt_inv) * cov_aa_sqrt_inv;
+
+    conditional.prepare_cov();
+    spdlog::debug("conditional.cov type={}", type_name<enoki::scalar_t<decltype(conditional.cov)>>());
 }
 
 template<typename Joint_, typename Marginal_, typename Conditional_>
-auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional(
+auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_vectorized(
     const MarginalVectorS& point
 ) -> void {
-    spdlog::info("EmbeddedExpr={}, EmbeddedS={}, point={}",
-        type_name<typename decltype(tangent_space)::EmbeddedExpr>(),
-        type_name<typename decltype(tangent_space)::EmbeddedS>(),
-        type_name<decltype(point)>()
-    );
-    spdlog::info("m.ts.to={}, prod={}, from={}",
-        type_name<decltype(marginal.tangent_space.to(point))>(),
-        type_name<decltype(mean_transform * marginal.tangent_space.to(point))>(),
-        type_name<decltype(tangent_space.from(mean_transform * marginal.tangent_space.to(point)))>()
-    );
     conditional.tangent_space.set_mean(
         tangent_space.from(mean_transform * marginal.tangent_space.to(point))
     );
+    marginal.posterior(point, conditional.weight.pmf, marginal_tangents);
 }
 
 }
 
-ENOKI_STRUCT_SUPPORT(sdmm::SDMMConditioner, marginal, conditional, mean_transform, tangent_space);
+ENOKI_STRUCT_SUPPORT(sdmm::SDMMConditioner, marginal, conditional, mean_transform, tangent_space, marginal_tangents);

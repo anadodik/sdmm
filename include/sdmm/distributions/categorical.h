@@ -33,7 +33,7 @@ template<typename Value_>
     Mask zero_values = enoki::neq(pmf, 0.f);
     BoolOuter valid_pmf = false;
     for(size_t i = 0; i < enoki::array_size_v<BoolOuter>; ++i) {
-        coeff_safe(valid_pmf, i) = enoki::any(zero_values.coeff(i));
+        coeff_safe(valid_pmf, i) = enoki::any(coeff_safe(zero_values, i));
     }
     if(!enoki::all(valid_pmf)) {
         enoki::bool_array_t<BoolOuter> bool_array = valid_pmf;

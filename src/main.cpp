@@ -42,7 +42,7 @@ void random_init(const SDMM& distribution) {
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     // enoki::set_flush_denormals(true);
-    // spdlog::info("Hello SDMM! Using max packet size: {}", enoki::max_packet_size);
+    spdlog::info("Welcome to SDMM! Using max packet size: {}", enoki::max_packet_size);
 
     // using Packet = enoki::Packet<float, 32>;
     // using Array = enoki::DynamicArray<Packet>;

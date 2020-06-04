@@ -13,7 +13,7 @@ This library depends on other projects, and they have to be available first.
 
 ```
 git submodule update --init --recursive
-sudo apt install libboost-all-dev libspdlog-dev libfmt-dev
+sudo apt install libboost-all-dev libspdlog-dev libfmt-dev libbenchmark-dev
 ```
 
 ### Compiling

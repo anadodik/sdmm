@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include <enoki/array.h>
+#include <enoki/dynamic.h>
 #include <enoki/matrix.h>
 
 #include <fmt/ostream.h>
@@ -65,18 +66,16 @@ struct SDMM {
 
     using Packet = nested_packet_t<Scalar>;
 
-    auto prepare() -> void;
+    auto prepare_cov() -> void;
 
-    template<typename VectorIn>
-    auto pdf_gaussian(const VectorIn& point, Scalar& pdf, Vector& tangent) const -> void;
+    template<typename VectorIn, typename Tangent>
+    auto pdf_gaussian(const VectorIn& point, Scalar& pdf, Tangent& tangent) const -> void;
+
+    template<typename VectorIn, typename Tangent>
+    auto posterior(const VectorIn& point, Scalar& posterior, Tangent& tangent) const -> void;
 
     template<typename VectorIn>
     auto pdf_gaussian(const VectorIn& point, Scalar& pdf) const -> void;
-
-    template<typename VectorIn>
-    auto posterior(const VectorIn& point, Scalar& posterior, Vector& tangent) const -> void;
-
-    // auto pdf(const VectorS& point, Scalar& pdf) const -> void;
 
     auto to_standard_normal(const Vector& point) const -> VectorExpr;
 
@@ -86,8 +85,7 @@ struct SDMM {
     TangentSpace tangent_space;
     Matrix cov;
 
-    // TODO:
-    // Make struct Cholesky {};
+    // TODO: make struct Cholesky {};
     Matrix cov_sqrt;
     Scalar inv_cov_sqrt_det;
     Mask cov_is_psd;
@@ -105,9 +103,18 @@ struct SDMM {
     );
 };
 
-// TODO: add Categorical::prepare()
+template<typename SDMM>
+[[nodiscard]] inline auto prepare(SDMM& distribution) {
+    enoki::vectorize(
+        VECTORIZE_WRAP_MEMBER(prepare_cov),
+        distribution
+    );
+    return distribution.weight.prepare();
+}
+
+// TODO: make [[nodiscard]] and check cov_is_psd
 template<typename Vector_, typename Matrix_, typename TangentSpace_>
-auto SDMM<Vector_, Matrix_, TangentSpace_>::prepare() -> void {
+auto SDMM<Vector_, Matrix_, TangentSpace_>::prepare_cov() -> void {
     sdmm::linalg::cholesky(cov, cov_sqrt, cov_is_psd);
     inv_cov_sqrt_det = 1.f / enoki::hprod(enoki::diag(cov_sqrt));
     assert(enoki::all(cov_is_psd));
@@ -122,9 +129,9 @@ auto SDMM<Vector_, Matrix_, TangentSpace_>::to_standard_normal(
 }
 
 template<typename Vector_, typename Matrix_, typename TangentSpace_>
-template<typename VectorIn>
+template<typename VectorIn, typename Tangent>
 auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
-    const VectorIn& point, Scalar& pdf, Vector& tangent
+    const VectorIn& point, Scalar& pdf, Tangent& tangent
 ) const -> void {
     tangent = tangent_space.to(point);
     VectorExpr standardized = to_standard_normal(tangent);
@@ -140,15 +147,20 @@ template<typename VectorIn>
 auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
     const VectorIn& point, Scalar& pdf
 ) const -> void {
+    // #ifdef NDEBUG
+    // spdlog::warn(
+    //     "Using allocating call to pdf_gaussian. "
+    //     "Consider pre-allocating tangent_vectors."
+    // );
+    // #endif // NDEBUG
     VectorExpr tangent;
-    Vector tangent_ref = tangent;
-    pdf_gaussian(point, pdf, tangent_ref);
+    pdf_gaussian(point, pdf, tangent);
 }
 
 template<typename Vector_, typename Matrix_, typename TangentSpace_>
-template<typename VectorIn>
+template<typename VectorIn, typename Tangent>
 auto SDMM<Vector_, Matrix_, TangentSpace_>::posterior(
-    const VectorIn& point, Scalar& posterior, Vector& tangent
+    const VectorIn& point, Scalar& posterior, Tangent& tangent
 ) const -> void {
     pdf_gaussian(point, posterior, tangent);
     posterior *= weight.pmf;
