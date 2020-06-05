@@ -6,6 +6,7 @@
 
 #include "sdmm/core/utils.h"
 #include "sdmm/linalg/cholesky.h"
+#include "sdmm/linalg/coordinate_system.h"
 
 #include "utils.h"
 
@@ -136,6 +137,25 @@ TEST_CASE("sdmm::linalg::cholesky<DynamicArray>") {
     using DynamicArray = enoki::DynamicArray<Packet>;
 
     test_cholesky<DynamicArray>();
+}
+
+TEST_CASE("sdmm::linalg::CoordinateSystem") {
+    static constexpr size_t ArraySize = 2;
+    using Packet = enoki::Packet<float, ArraySize>;
+    using DynamicArray = enoki::DynamicArray<Packet>;
+    using Vector = sdmm::Vector<DynamicArray, 3>;
+    using CoordinateSystem = sdmm::linalg::CoordinateSystem<Vector>;
+    
+    CoordinateSystem coordinates = enoki::zero<CoordinateSystem>(1);
+    Vector n{
+        DynamicArray(0, 1), DynamicArray(0, 0), DynamicArray(1, 0)
+    };
+    coordinates.prepare(n);
+    CHECK(enoki::slice(coordinates.s, 0) == Vector{1.f, -0.f, -0.f});
+    CHECK(enoki::slice(coordinates.t, 0) == Vector{-0.f, 1.f, -0.f});
+
+    CHECK(enoki::slice(coordinates.s, 1) == Vector{0.f, -0.f, -1.f});
+    CHECK(enoki::slice(coordinates.t, 1) == Vector{-0.f, 1.f, -0.f});
 }
 
 
