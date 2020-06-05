@@ -105,10 +105,14 @@ struct SDMM {
 
 template<typename SDMM>
 [[nodiscard]] inline auto prepare(SDMM& distribution) {
-    enoki::vectorize(
-        VECTORIZE_WRAP_MEMBER(prepare_cov),
-        distribution
-    );
+    if constexpr(enoki::is_dynamic_v<SDMM>) {
+        enoki::vectorize(
+            VECTORIZE_WRAP_MEMBER(prepare_cov),
+            distribution
+        );
+    } else {
+        distribution.prepare_cov();
+    }
     return distribution.weight.prepare();
 }
 

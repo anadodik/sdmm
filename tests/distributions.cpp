@@ -99,7 +99,9 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
 
     CHECK(sdmm::prepare(distribution));
 
-    sdmm::EuclidianTangentSpace<sdmm::Vector<Value, 3>, sdmm::Vector<Value, 3>> tangent_space;
+    sdmm::EuclidianTangentSpace<
+        sdmm::Vector<Value, 3>, sdmm::Vector<Value, 3>
+    > tangent_space;
 
     SUBCASE("Calculating pdf for point={1, 2}.") {
         Value pdf(0);
