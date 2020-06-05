@@ -74,6 +74,16 @@ struct Matrix : enoki::StaticArrayImpl<enoki::Array<Value_, Rows_>, Cols_, false
                 coeff(j, i) = values[i * Size + j];
     }
 
+    template <typename... Column>
+    ENOKI_INLINE static Matrix from_cols(const Column&... cols) {
+        return Matrix(cols...);
+    }
+
+    template <typename... Row>
+    ENOKI_INLINE static Matrix from_rows(const Row&... rows) {
+        return transpose(Matrix(rows...));
+    }
+
     static ENOKI_INLINE Derived zero_(size_t size) {
         Derived result;
         for (size_t i = 0; i < Size; ++i)
