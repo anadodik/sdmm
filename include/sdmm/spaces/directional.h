@@ -35,19 +35,64 @@ struct DirectionalTangentSpace {
 
     template<typename EmbeddedIn>
     auto to(const EmbeddedIn& embedded) const -> TangentExpr {
-        return embedded - mean;
+        EmbeddedExpr embedded_local = coordinate_system.from * embedded;
+        ScalarExpr cos_angle = embedded_local.z();
+        assert(cos_angle >= -1);
+
+        ScalarExpr angle = enoki::safe_acos(cos_angle);
+        ScalarExpr sin_angle = enoki::safe_sqrt(1 - cos_angle * cos_angle);
+        ScalarExpr rcp_sinc_angle = enoki::select(
+            sin_angle < 1e-4,
+            ScalarExpr(1),
+            angle / sin_angle
+        );
+        return TangentExpr{
+            embedded_local.x() * rcp_sinc_angle,
+            embedded_local.y() * rcp_sinc_angle
+        };
+
+        // jacobian = angleOverSin;
+
+        // return true;
     }
 
     template<typename TangentIn>
     auto from(const TangentIn& tangent) const -> EmbeddedExpr {
-        return tangent + mean;
+        ScalarExpr length = enoki::norm(tangent);
+        // if(length >= M_PI) {
+        //     embedding = EmbeddingVectord::Zero();
+        //     return false;
+        // }
+        auto [sin_angle, cos_angle] = enoki::sincos(length);
+        ScalarExpr sinc_angle = enoki::select(
+            sin_angle < 1e-4,
+            ScalarExpr(1),
+            sinc_angle / length
+        );
+
+        EmbeddedExpr embedded_local{
+            tangent.x() * sinc_angle,
+            tangent.y() * sinc_angle,
+            cos_angle
+        };
+        return coordinate_system.from * embedded_local;
+        // embedding = m_rotation * relToNorthPole;
+
+        // jacobian = sinOverAngle;
+
+        // return true;
     }
 
-    auto set_mean(const Embedded& mean_) -> void { mean = mean_; }
-    auto set_mean(Embedded&& mean_) -> void { mean = std::move(mean_); }
+    auto set_mean(const Embedded& mean_) -> void {
+        mean = mean_;
+        coordinate_system.prepare(mean);
+    }
+    auto set_mean(Embedded&& mean_) -> void {
+        mean = std::move(mean_);
+        coordinate_system.prepare(mean);
+    }
 
     Embedded mean;
-    
     linalg::CoordinateSystem<Embedded> coordinate_system;
 
     ENOKI_STRUCT(DirectionalTangentSpace, mean, coordinate_system);

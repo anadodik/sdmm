@@ -35,7 +35,7 @@ struct CoordinateSystem {
             enoki::mulsign_neg(n.x(), n.z())
         );
         t = VectorExpr(b, sign + enoki::sqr(n.y()) * a, -n.y());
-        from.from_cols(s, t, n);
+        from = Rotation::from_cols(s, t, n);
         to = linalg::transpose(from);
     }
 
