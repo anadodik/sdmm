@@ -64,6 +64,7 @@ add_executable(
     tests/linalg.cpp
     tests/distributions.cpp
     tests/matrix.cpp
+    tests/spaces.cpp
     tests/minimal.cpp
 )
 target_compile_features(tests PRIVATE cxx_std_17)
@@ -78,8 +79,8 @@ add_executable(
     benchmarks/distributions.cpp
 )
 target_compile_features(benchmarks PRIVATE cxx_std_17)
-target_include_directories(benchmarks PRIVATE benchmark::benchmark)
-target_link_libraries(benchmarks PRIVATE sdmm benchmark::benchmark)
+target_include_directories(benchmarks PRIVATE benchmark::benchmark ext)
+target_link_libraries(benchmarks PRIVATE sdmm benchmark::benchmark Eigen3::Eigen)
 
 # find_package(OpenMP)
 # 

@@ -145,6 +145,14 @@ ENOKI_INLINE auto transpose(const Matrix<Value_, Rows_, Cols_>& matrix) {
     return result;
 }
 
+template <typename T, enoki::enable_if_matrix_t<T> = 0>
+ENOKI_INLINE T identity(size_t size = 1) {
+    T result = enoki::zero<T>(size);
+    for (size_t i = 0; i < T::Cols; ++i)
+        result(i, i) = enoki::full<typename T::Entry>(enoki::scalar_t<T>(1.f), size);
+    return result;
+}
+
 }
 
 namespace enoki {
