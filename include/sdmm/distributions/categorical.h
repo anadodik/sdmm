@@ -23,20 +23,33 @@ struct Categorical {
 
     BoolOuter prepare();
     void normalize_cdf(const ValueOuter& inv_normalizer);
-    BoolOuter is_valid();
 
     ENOKI_STRUCT(Categorical, pmf, cdf);
 };
 
-template<typename Value_>
-[[nodiscard]] auto Categorical<Value_>::is_valid() -> BoolOuter {
-    Mask zero_values = enoki::neq(pmf, 0.f);
-    BoolOuter valid_pmf = false;
-    for(size_t i = 0; i < enoki::array_size_v<BoolOuter>; ++i) {
-        coeff_safe(valid_pmf, i) = enoki::any(coeff_safe(zero_values, i));
+template<typename Value_, std::enable_if_t<enoki::is_array_v<typename Categorical<Value_>::BoolOuter>, int> = 0>
+[[nodiscard]] auto is_valid(const Categorical<Value_>& categorical) -> typename Categorical<Value_>::BoolOuter {
+    using CategoricalV = Categorical<Value_>;
+    const typename CategoricalV::Mask zero_values = enoki::neq(categorical.pmf, 0.f);
+    typename CategoricalV::BoolOuter valid_pmf = false;
+    for(size_t i = 0; i < enoki::array_size_v<typename CategoricalV::BoolOuter>; ++i) {
+        valid_pmf.coeff(i) = enoki::any(zero_values.coeff(i));
     }
     if(!enoki::all(valid_pmf)) {
-        enoki::bool_array_t<BoolOuter> bool_array = valid_pmf;
+        enoki::bool_array_t<typename CategoricalV::BoolOuter> bool_array = valid_pmf;
+        spdlog::warn("Categorical::is_valid()={}.", bool_array);
+    }
+    return valid_pmf;
+}
+
+template<typename Value_, std::enable_if_t<!enoki::is_array_v<typename Categorical<Value_>::BoolOuter>, int> = 0>
+[[nodiscard]] auto is_valid(const Categorical<Value_>& categorical) -> typename Categorical<Value_>::BoolOuter {
+    using CategoricalV = Categorical<Value_>;
+    const typename CategoricalV::Mask zero_values = enoki::neq(categorical.pmf, 0.f);
+    typename CategoricalV::BoolOuter valid_pmf = false;
+    valid_pmf = enoki::any(zero_values);
+    if(!enoki::all(valid_pmf)) {
+        enoki::bool_array_t<typename CategoricalV::BoolOuter> bool_array = valid_pmf;
         spdlog::warn("Categorical::is_valid()={}.", bool_array);
     }
     return valid_pmf;
@@ -55,7 +68,7 @@ template<typename Value_>
     //     VECTORIZE_WRAP_MEMBER(is_valid),
     //     *this
     // );
-    BoolOuter valid = is_valid();
+    BoolOuter valid = is_valid(*this);
     if(enoki::none(valid)) {
         return valid;
     }

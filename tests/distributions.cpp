@@ -75,6 +75,81 @@ TEST_CASE("SDMM::pdf<Array>") {
     }
 }
 
+TEST_CASE("SDMM<SpatioDirectionalTangentSpace>") {
+    using Packet = enoki::Packet<float, 2>;
+    using Value = enoki::DynamicArray<Packet>;
+    using TangentSpace = sdmm::SpatioDirectionalTangentSpace<
+        sdmm::Vector<Value, 4>, sdmm::Vector<Value, 3>
+    >;
+    using SDMM = sdmm::SDMM<
+        sdmm::Vector<Value, 4>, sdmm::Matrix<Value, 3>, TangentSpace
+    >;
+    SDMM distribution;
+    enoki::set_slices(distribution, 2);
+
+    distribution.weight.pmf = Value(0.2, 0.8);
+    distribution.tangent_space.set_mean(
+        sdmm::vector_t<SDMM>(
+            Value(2, 2), Value(0, 1), Value(1, 0), Value(0, 0)
+        )
+    );
+    distribution.cov = sdmm::matrix_t<SDMM>(
+        Value(3, 2), Value(0.5, 0), Value(1, 0.09),
+        Value(0.5, 0), Value(1.4, 0.1), Value(0.5, 0.02),
+        Value(1, 0.09), Value(0.5, 0.02), Value(4, 2)
+    );
+
+    CHECK(sdmm::prepare(distribution));
+    Value pdf(0);
+    enoki::set_slices(pdf, 2);
+    sdmm::vector_s_t<SDMM> point({2, 1, 0, 0});
+    enoki::vectorize(
+        VECTORIZE_WRAP_MEMBER(pdf_gaussian),
+        distribution,
+        point,
+        pdf
+    );
+    spdlog::info("SpatioDirectional Gaussian pdf={}", pdf);
+    // TODO: add test-case
+}
+
+TEST_CASE("SDMM<DirectionalTangentSpace>") {
+    using Packet = enoki::Packet<float, 2>;
+    using Value = enoki::DynamicArray<Packet>;
+    using TangentSpace = sdmm::DirectionalTangentSpace<
+        sdmm::Vector<Value, 3>, sdmm::Vector<Value, 2>
+    >;
+    using SDMM = sdmm::SDMM<
+        sdmm::Vector<Value, 3>, sdmm::Matrix<Value, 2>, TangentSpace
+    >;
+    SDMM distribution;
+    enoki::set_slices(distribution, 2);
+
+    distribution.weight.pmf = Value(0.2, 0.8);
+    distribution.tangent_space.set_mean(
+        sdmm::vector_t<SDMM>(
+            Value(0, 1), Value(1, 0), Value(0, 0)
+        )
+    );
+    distribution.cov = sdmm::matrix_t<SDMM>(
+        Value(3, 2), Value(0.5, 0),
+        Value(0.5, 0), Value(1.4, 0.1)
+    );
+
+    CHECK(sdmm::prepare(distribution));
+    Value pdf(0);
+    enoki::set_slices(pdf, 2);
+    sdmm::vector_s_t<SDMM> point({1, 0, 0});
+    enoki::vectorize(
+        VECTORIZE_WRAP_MEMBER(pdf_gaussian),
+        distribution,
+        point,
+        pdf
+    );
+    spdlog::info("Directional Gaussian pdf={}", pdf);
+    // TODO: add test-case
+}
+
 TEST_CASE("SDMM::pdf<DynamicArray>") {
     using Packet = enoki::Packet<float, 2>;
     using Value = enoki::DynamicArray<Packet>;
@@ -276,14 +351,14 @@ TEST_CASE("Categorical<Value>") {
 
     SUBCASE("Categorical::is_valid()") {
         Categorical categorical = enoki::zero<Categorical>(5);
-        CHECK(categorical.is_valid() == BoolOuter{false, false, false});
+        CHECK(is_valid(categorical) == BoolOuter{false, false, false});
         categorical.pmf.x() = enoki::full<DynamicValue>(1, 5);
         categorical.pmf.y() = enoki::full<DynamicValue>(1, 5);
-        CHECK(categorical.is_valid() == BoolOuter{true, true, false});
+        CHECK(is_valid(categorical) == BoolOuter{true, true, false});
         categorical.pmf.z() = enoki::full<DynamicValue>(1, 5);
-        CHECK(categorical.is_valid() == BoolOuter{true, true, true});
+        CHECK(is_valid(categorical) == BoolOuter{true, true, true});
         categorical.pmf.z().coeff(0) = 0.f;
-        CHECK(categorical.is_valid() == BoolOuter{true, true, true});
+        CHECK(is_valid(categorical) == BoolOuter{true, true, true});
     }
 
     SUBCASE("Categorical::prepare()") {

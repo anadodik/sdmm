@@ -151,11 +151,11 @@ TEST_CASE("sdmm::linalg::CoordinateSystem") {
         DynamicArray(0, 1), DynamicArray(0, 0), DynamicArray(1, 0)
     };
     coordinates.prepare(n);
-    CHECK(enoki::slice(coordinates.s, 0) == Vector{1.f, -0.f, -0.f});
-    CHECK(enoki::slice(coordinates.t, 0) == Vector{-0.f, 1.f, -0.f});
+    CHECK(enoki::slice(coordinates.from.col(0), 0) == Vector{1.f, -0.f, -0.f});
+    CHECK(enoki::slice(coordinates.from.col(1), 0) == Vector{-0.f, 1.f, -0.f});
 
-    CHECK(enoki::slice(coordinates.s, 1) == Vector{0.f, -0.f, -1.f});
-    CHECK(enoki::slice(coordinates.t, 1) == Vector{-0.f, 1.f, -0.f});
+    CHECK(enoki::slice(coordinates.from.col(0), 1) == Vector{0.f, -0.f, -1.f});
+    CHECK(enoki::slice(coordinates.from.col(1), 1) == Vector{-0.f, 1.f, -0.f});
 }
 
 

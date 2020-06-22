@@ -6,6 +6,7 @@
 #include <enoki/array.h>
 #include <enoki/dynamic.h>
 
+#include "sdmm/linalg/vector.h"
 #include "sdmm/linalg/matrix.h"
 
 #define VECTORIZE_WRAP(FUNC_NAME) [](auto&&... params) { FUNC_NAME(params...); }
@@ -95,28 +96,25 @@ auto& coeff_safe(Value& value, [[maybe_unused]] size_t i) {
 };
 
 template<typename Value, std::enable_if_t<enoki::is_array_v<Value>, int> = 0> 
-auto& coeff_safe(Value& value, size_t i) {
+ENOKI_INLINE auto& coeff_safe(Value& value, size_t i) {
     return value.coeff(i);
 };
 
-// Taken from Mitsuba2:
-template <typename Value_, size_t Size_>
-struct Vector : enoki::StaticArrayImpl<Value_, Size_, false, Vector<Value_, Size_>> {
-    using Base = enoki::StaticArrayImpl<Value_, Size_, false, Vector<Value_, Size_>>;
-
-    /// Helper alias used to implement type promotion rules
-    template <typename T> using ReplaceValue = Vector<T, Size_>;
-
-    using ArrayType = Vector;
-    using MaskType = enoki::Mask<Value_, Size_>;
-
-    static constexpr bool IsMatrix = false;
-
-    ENOKI_ARRAY_IMPORT(Base, Vector)
+template<typename Value, std::enable_if_t<enoki::is_array_v<Value>, int> = 0> 
+ENOKI_INLINE const auto& coeff_safe(const Value& value, size_t i) {
+    return value.coeff(i);
 };
+
+template <typename Value_, size_t Size_>
+using Vector = sdmm::linalg::Vector<Value_, Size_>;
 
 template<typename Value, size_t Rows, size_t Cols=Rows>
 using Matrix = sdmm::linalg::Matrix<Value, Rows, Cols>;
+
+template<typename Array, typename Value, size_t Size, typename... Args>
+auto full_inner(Args... args) {
+    return Array{enoki::full<Value>(args, Size)...};
+}
 
 // https://stackoverflow.com/questions/81870/is-it-possible-to-print-a-variables-type-in-standard-c
 template <class T>

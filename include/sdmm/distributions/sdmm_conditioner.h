@@ -40,6 +40,7 @@ struct SDMMConditioner {
     using MarginalTangentSpace = tangent_space_t<Marginal>;
     using ConditionalTangentSpace = tangent_space_t<Conditional>;
 
+    using ScalarExpr = enoki::expr_t<enoki::value_t<vector_t<Joint>>>;
     using JointMatrix = matrix_t<Joint>;
     using MarginalVectorS = vector_s_t<Marginal>;
     using MeanTransformMatrix = typename JointMatrix::template ReplaceSize<
@@ -87,9 +88,7 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::prepare_vectorized(
     const Joint_& joint
 ) -> void {
     create_marginal(joint, marginal);
-    spdlog::debug("cov_aa_sqrt={}", marginal.cov_sqrt);
     matrix_expr_t<Marginal> cov_aa_sqrt_inv = inverse_lower_tri(marginal.cov_sqrt);
-    spdlog::debug("cov_aa_sqrt_inv={}", cov_aa_sqrt_inv);
 
     matrix_expr_t<Conditional> cov_bb;
     for(size_t r = MarginalSize; r < JointSize; ++r) {
@@ -97,7 +96,6 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::prepare_vectorized(
             cov_bb(r - MarginalSize, c - MarginalSize) = joint.cov(r, c);
         }
     }
-    spdlog::debug("cov_bb={}", cov_bb);
 
     typename tangent_space_t<Conditional>::EmbeddedExpr mean_b;
     for(
@@ -118,27 +116,23 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::prepare_vectorized(
             cov_ab(c, r - MarginalSize) = joint.cov(r, c);
         }
     }
-    spdlog::debug("cov_aa={}", marginal.cov);
-    spdlog::debug("cov_ab={}", cov_ab);
-    spdlog::debug("cov_ba={}", cov_ba);
     auto aa_sqrt_inv_ab = cov_aa_sqrt_inv * cov_ab;
-    spdlog::debug("aa_sqrt_inv_ab={}", aa_sqrt_inv_ab);
     conditional.cov = cov_bb - linalg::transpose(aa_sqrt_inv_ab) * aa_sqrt_inv_ab;
-    spdlog::debug("aa^-1={}", linalg::transpose(cov_aa_sqrt_inv) * cov_aa_sqrt_inv);
-    spdlog::debug("ba*aa^-1*ab={}", linalg::transpose(aa_sqrt_inv_ab) * aa_sqrt_inv_ab);
-    spdlog::debug("conditional.cov={}", conditional.cov);
     mean_transform = cov_ba * enoki::transpose(cov_aa_sqrt_inv) * cov_aa_sqrt_inv;
 
     conditional.prepare_cov();
-    spdlog::debug("conditional.cov type={}", type_name<enoki::scalar_t<decltype(conditional.cov)>>());
 }
 
 template<typename Joint_, typename Marginal_, typename Conditional_>
 auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_vectorized(
     const MarginalVectorS& point
 ) -> void {
+    ScalarExpr inv_jacobian_to, inv_jacobian_from;
     conditional.tangent_space.set_mean(
-        tangent_space.from(mean_transform * marginal.tangent_space.to(point))
+        tangent_space.from(
+            mean_transform * marginal.tangent_space.to(point, inv_jacobian_to),
+            inv_jacobian_from
+        )
     );
     marginal.posterior(point, conditional.weight.pmf, marginal_tangents);
 }

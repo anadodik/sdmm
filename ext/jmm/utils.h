@@ -283,7 +283,7 @@ inline std::enable_if_t<
 }
 
 template<typename T>
-using aligned_vector = std::vector<T, Eigen::aligned_allocator<T>>;
+using aligned_vector = std::vector<T>;//, Eigen::aligned_allocator<T>>;
 
 }
 

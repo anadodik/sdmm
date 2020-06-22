@@ -143,7 +143,7 @@ public:
     Scalar modelError() const { return m_modelError; }
     void setModelError(Scalar modelError) { m_modelError = modelError; }
 
-    template<typename SFINAE = void>
+    template<int dims=t_dims, std::enable_if_t<dims != 6, int> = 0>
     void posteriorAndLog(
         const Vectord& sample,
         bool useHeuristic,
@@ -156,20 +156,7 @@ public:
     ) const {
     }
 
-    template<int dims=t_dims, typename std::enable_if_t<dims != 6, int> = 0>
-    void posteriorAndLog(
-        const Vectord& sample,
-        bool useHeuristic,
-        Scalar heuristicPdf,
-        Eigen::Matrix<Scalar, Eigen::Dynamic, 1>& pdf,
-        // Scalar& marginalPdf,
-        Eigen::Matrix<Scalar, Eigen::Dynamic, 1>& posterior,
-        Eigen::Matrix<Scalar, Component::t_jointTangentDims, Eigen::Dynamic>& tangentVectors,
-        Scalar& heuristicPosterior
-    ) const {
-    }
-
-    template<int dims=t_dims, typename std::enable_if_t<dims == 6, int> = 0>
+    template<int dims=t_dims, std::enable_if_t<dims == 6, int> = 0>
     void posteriorAndLog(
         const Vectord& sample,
         bool useHeuristic,

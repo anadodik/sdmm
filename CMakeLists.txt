@@ -73,26 +73,38 @@ target_link_libraries(tests PRIVATE sdmm Eigen3::Eigen doctest::doctest)
 
 find_package(benchmark REQUIRED)
 
-add_executable(
-    benchmarks
-
-    benchmarks/distributions.cpp
+add_library(jmm ext/jmm/multivariate_tangent_normal.cpp)
+target_include_directories(jmm PRIVATE ext)
+target_link_libraries(jmm PUBLIC Eigen3::Eigen)
+target_compile_options(jmm PRIVATE 
+    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-w>
+    $<$<CXX_COMPILER_ID:MSVC>:/W1>
 )
+
+add_library(jmm_interface INTERFACE)
+target_include_directories(jmm_interface INTERFACE ext)
+target_compile_options(jmm_interface INTERFACE 
+    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-w>
+    $<$<CXX_COMPILER_ID:MSVC>:/W1>
+)
+
+find_package(Boost 1.66 REQUIRED COMPONENTS
+    system
+    filesystem
+    thread
+    iostreams
+    serialization
+)
+
+add_executable(benchmarks benchmarks/distributions.cpp benchmarks/em.cpp)
+target_compile_definitions(benchmarks PRIVATE COMPARISON=1)
 target_compile_features(benchmarks PRIVATE cxx_std_17)
-target_include_directories(benchmarks PRIVATE benchmark::benchmark ext)
-target_link_libraries(benchmarks PRIVATE sdmm benchmark::benchmark Eigen3::Eigen)
+target_include_directories(benchmarks PRIVATE benchmark::benchmark)
+target_link_libraries(benchmarks PRIVATE sdmm benchmark::benchmark Eigen3::Eigen Boost::system Boost::filesystem Boost::thread Boost::serialization jmm jmm_interface)
 
 # find_package(OpenMP)
 # 
-# find_package(Boost 1.66 REQUIRED COMPONENTS
-#     system
-#     filesystem
-#     thread
-#     iostreams
-#     serialization
-#     program_options
-# )
-# 
+
 # OpenMP::OpenMP_CXX
 # Boost::system
 # Boost::filesystem

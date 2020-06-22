@@ -6,6 +6,8 @@
 #include "enoki/array.h"
 #include "enoki/matrix.h"
 
+#include "sdmm/linalg/vector.h"
+
 namespace sdmm::linalg {
 
 template <typename Value_, size_t Rows_, size_t Cols_=Rows_>
@@ -98,6 +100,19 @@ struct Matrix : enoki::StaticArrayImpl<enoki::Array<Value_, Rows_>, Cols_, false
     ENOKI_INLINE const Column& col(size_t index) const { return coeff(index); }
 };
 
+template <typename Scalar, size_t Rows>
+ENOKI_INLINE auto outer(const Vector<Scalar, Rows> &s) {
+    using EValue  = enoki::expr_t<Scalar>;
+    using EMatrix = Matrix<EValue, Rows>;
+    EMatrix sum;
+    for (size_t c = 0; c < Rows; ++c) {
+        for (size_t r = 0; r < Rows; ++r) {
+            sum(r, c) = s.coeff(r) * s.coeff(c);
+        }
+    }
+    return sum;
+}
+
 template <typename T0, typename T1, size_t Rows1, size_t Rows2,
           size_t Cols1, size_t Cols2,
           typename Result = Matrix<enoki::expr_t<T0, T1>, Rows1, Cols2>,
@@ -121,11 +136,18 @@ ENOKI_INLINE auto operator*(const sdmm::linalg::Matrix<T0, Rows, Cols> &m, const
     if constexpr (enoki::array_size_v<T1> == Cols && T1::IsVector) {
         using EValue  = enoki::expr_t<T0, enoki::value_t<T1>>;
         using EVector = enoki::Array<EValue, Rows>;
-        EVector sum = m.coeff(0) * EVector::full_(s.coeff(0), 1);
-        for (size_t i = 1; i < Cols; ++i) {
-            sum = fmadd(m.coeff(i), EVector::full_(s.coeff(i), 1), sum);
+        EVector sum = enoki::zero<EVector>();
+        for (size_t c = 0; c < Cols; ++c) {
+            for (size_t r = 0; r < Rows; ++r) {
+                sum.coeff(r) = fmadd(m(r, c), s.coeff(c), sum.coeff(r));
+            }
         }
         return sum;
+        // EVector sum = m.coeff(0) * EVector::full_(s.coeff(0), 1);
+        // for (size_t i = 1; i < Cols; ++i) {
+        //     sum = fmadd(m.coeff(i), EVector::full_(s.coeff(i), 1), sum);
+        // }
+        // return sum;
     } else {
         using EValue  = enoki::expr_t<T0, T1>;
         using EArray  = enoki::Array<enoki::Array<EValue, Rows>, Cols>;

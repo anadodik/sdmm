@@ -32,12 +32,14 @@ struct EuclidianTangentSpace {
     using Packet = nested_packet_t<Scalar>;
 
     template<typename EmbeddedIn>
-    auto to(const EmbeddedIn& embedded) const -> TangentExpr {
+    auto to(const EmbeddedIn& embedded, ScalarExpr& inv_jacobian) const -> TangentExpr {
+        inv_jacobian = ScalarExpr(1);
         return embedded - mean;
     }
 
     template<typename TangentIn>
-    auto from(const TangentIn& tangent) const -> EmbeddedExpr {
+    auto from(const TangentIn& tangent, ScalarExpr& inv_jacobian) const -> EmbeddedExpr {
+        inv_jacobian = ScalarExpr(1);
         return tangent + mean;
     }
 

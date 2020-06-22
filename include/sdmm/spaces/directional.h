@@ -34,10 +34,10 @@ struct DirectionalTangentSpace {
     using Packet = nested_packet_t<Scalar>;
 
     template<typename EmbeddedIn>
-    auto to(const EmbeddedIn& embedded) const -> TangentExpr {
-        EmbeddedExpr embedded_local = coordinate_system.from * embedded;
+    auto to(const EmbeddedIn& embedded, ScalarExpr& inv_jacobian) const -> TangentExpr {
+        EmbeddedExpr embedded_local = coordinate_system.to * embedded;
         ScalarExpr cos_angle = embedded_local.z();
-        assert(cos_angle >= -1);
+        // assert(enoki::all(cos_angle >= -1));
 
         ScalarExpr angle = enoki::safe_acos(cos_angle);
         ScalarExpr sin_angle = enoki::safe_sqrt(1 - cos_angle * cos_angle);
@@ -46,23 +46,21 @@ struct DirectionalTangentSpace {
             ScalarExpr(1),
             angle / sin_angle
         );
+
+        inv_jacobian = rcp_sinc_angle;
         return TangentExpr{
             embedded_local.x() * rcp_sinc_angle,
             embedded_local.y() * rcp_sinc_angle
         };
-
-        // jacobian = angleOverSin;
-
-        // return true;
     }
 
     template<typename TangentIn>
-    auto from(const TangentIn& tangent) const -> EmbeddedExpr {
-        ScalarExpr length = enoki::norm(tangent);
+    auto from(const TangentIn& tangent, ScalarExpr& inv_jacobian) const -> EmbeddedExpr {
         // if(length >= M_PI) {
         //     embedding = EmbeddingVectord::Zero();
         //     return false;
         // }
+        ScalarExpr length = enoki::norm(tangent);
         auto [sin_angle, cos_angle] = enoki::sincos(length);
         ScalarExpr sinc_angle = enoki::select(
             sin_angle < 1e-4,
@@ -75,18 +73,16 @@ struct DirectionalTangentSpace {
             tangent.y() * sinc_angle,
             cos_angle
         };
+        inv_jacobian = enoki::select(length > M_PI, sinc_angle, 0);
+
         return coordinate_system.from * embedded_local;
-        // embedding = m_rotation * relToNorthPole;
-
-        // jacobian = sinOverAngle;
-
-        // return true;
     }
 
     auto set_mean(const Embedded& mean_) -> void {
         mean = mean_;
         coordinate_system.prepare(mean);
     }
+
     auto set_mean(Embedded&& mean_) -> void {
         mean = std::move(mean_);
         coordinate_system.prepare(mean);

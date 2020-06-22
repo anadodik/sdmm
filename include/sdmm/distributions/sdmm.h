@@ -14,6 +14,8 @@
 #include "sdmm/distributions/categorical.h"
 #include "sdmm/linalg/cholesky.h"
 #include "sdmm/spaces/euclidian.h"
+#include "sdmm/spaces/directional.h"
+#include "sdmm/spaces/spatio_directional.h"
 
 namespace sdmm {
 
@@ -38,7 +40,20 @@ using matrix_expr_t = typename T::MatrixExpr;
 template<typename T>
 using matrix_s_t = typename T::MatrixS;
 
+template<typename T>
+using tangent_t = typename T::Tangent;
 
+template<typename T>
+using tangent_expr_t = typename T::TangentExpr;
+
+template<typename T>
+using embedded_t = typename T::Embedded;
+
+template<typename T>
+using embedded_expr_t = typename T::EmbeddedExpr;
+
+
+// TODO: Vector_ not necessary.
 template<typename Vector_, typename Matrix_, typename TangentSpace_>
 struct SDMM {
     static_assert(
@@ -48,15 +63,19 @@ struct SDMM {
     static constexpr size_t MeanSize = enoki::array_size_v<Vector_>;
     static constexpr size_t CovSize = enoki::array_size_v<Matrix_>;
 
-    using Scalar = enoki::value_t<Vector_>;
+    using TangentSpace = TangentSpace_;
     using Vector = Vector_;
     using Matrix = Matrix_;
-    using TangentSpace = TangentSpace_;
+    using Tangent = tangent_t<TangentSpace>;
+    using Embedded = embedded_t<TangentSpace>;
+    using Scalar = enoki::value_t<Vector_>;
     using Mask = enoki::mask_t<Scalar>;
 
     using ScalarExpr = enoki::expr_t<Scalar>;
     using VectorExpr = enoki::expr_t<Vector>;
     using MatrixExpr = enoki::expr_t<Matrix>;
+    using TangentExpr = tangent_expr_t<TangentSpace>;
+    using EmbeddedExpr = embedded_expr_t<TangentSpace>;
     using MaskExpr = enoki::expr_t<Mask>;
 
     using ScalarS = enoki::scalar_t<Scalar>;
@@ -68,16 +87,19 @@ struct SDMM {
 
     auto prepare_cov() -> void;
 
-    template<typename VectorIn, typename Tangent>
-    auto pdf_gaussian(const VectorIn& point, Scalar& pdf, Tangent& tangent) const -> void;
+    template<typename EmbeddedIn, typename TangentIn>
+    auto pdf_gaussian(const EmbeddedIn& point, Scalar& pdf, TangentIn& tangent) const -> void;
 
-    template<typename VectorIn, typename Tangent>
-    auto posterior(const VectorIn& point, Scalar& posterior, Tangent& tangent) const -> void;
+    template<typename EmbeddedIn, typename TangentIn>
+    auto posterior(const EmbeddedIn& point, Scalar& posterior, TangentIn& tangent) const -> void;
 
-    template<typename VectorIn>
-    auto pdf_gaussian(const VectorIn& point, Scalar& pdf) const -> void;
+    template<typename EmbeddedIn>
+    auto pdf_gaussian(const EmbeddedIn& point, Scalar& pdf) const -> void;
 
-    auto to_standard_normal(const Vector& point) const -> VectorExpr;
+    template<typename EmbeddedIn>
+    auto posterior(const EmbeddedIn& point, Scalar& posterior) const -> void;
+
+    auto to_standard_normal(const Tangent& point) const -> TangentExpr;
 
     // Make sure to update the ENOKI_STRUCT and ENOKI_STRUCT_SUPPORT
     // declarations when modifying these variables.
@@ -126,30 +148,32 @@ auto SDMM<Vector_, Matrix_, TangentSpace_>::prepare_cov() -> void {
 
 template<typename Vector_, typename Matrix_, typename TangentSpace_>
 auto SDMM<Vector_, Matrix_, TangentSpace_>::to_standard_normal(
-    const Vector& point
-) const -> VectorExpr {
-    VectorExpr standardized;
+    const Tangent& point
+) const -> TangentExpr {
+    TangentExpr standardized;
     return sdmm::linalg::solve(cov_sqrt, point);
 }
 
 template<typename Vector_, typename Matrix_, typename TangentSpace_>
-template<typename VectorIn, typename Tangent>
+template<typename EmbeddedIn, typename TangentIn>
 auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
-    const VectorIn& point, Scalar& pdf, Tangent& tangent
+    const EmbeddedIn& point, Scalar& pdf, TangentIn& tangent
 ) const -> void {
-    tangent = tangent_space.to(point);
-    VectorExpr standardized = to_standard_normal(tangent);
-    ScalarExpr squared_norm = enoki::hsum(standardized * standardized);
+    ScalarExpr inv_jacobian;
+    tangent = tangent_space.to(point, inv_jacobian);
+    TangentExpr standardized = to_standard_normal(tangent);
+    ScalarExpr squared_norm = enoki::squared_norm(standardized);
     pdf =
         inv_cov_sqrt_det *
+        inv_jacobian *
         gaussian_normalization<ScalarS, CovSize> *
         enoki::exp(ScalarS(-0.5) * squared_norm);
 }
 
 template<typename Vector_, typename Matrix_, typename TangentSpace_>
-template<typename VectorIn>
+template<typename EmbeddedIn>
 auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
-    const VectorIn& point, Scalar& pdf
+    const EmbeddedIn& point, Scalar& pdf
 ) const -> void {
     // #ifdef NDEBUG
     // spdlog::warn(
@@ -157,17 +181,32 @@ auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
     //     "Consider pre-allocating tangent_vectors."
     // );
     // #endif // NDEBUG
-    VectorExpr tangent;
+    TangentExpr tangent;
     pdf_gaussian(point, pdf, tangent);
 }
 
 template<typename Vector_, typename Matrix_, typename TangentSpace_>
-template<typename VectorIn, typename Tangent>
+template<typename EmbeddedIn, typename TangentIn>
 auto SDMM<Vector_, Matrix_, TangentSpace_>::posterior(
-    const VectorIn& point, Scalar& posterior, Tangent& tangent
+    const EmbeddedIn& point, Scalar& posterior, TangentIn& tangent
 ) const -> void {
     pdf_gaussian(point, posterior, tangent);
     posterior *= weight.pmf;
+}
+
+template<typename Vector_, typename Matrix_, typename TangentSpace_>
+template<typename EmbeddedIn>
+auto SDMM<Vector_, Matrix_, TangentSpace_>::posterior(
+    const EmbeddedIn& point, Scalar& pdf
+) const -> void {
+    // #ifdef NDEBUG
+    // spdlog::warn(
+    //     "Using allocating call to posterior. "
+    //     "Consider pre-allocating tangent_vectors."
+    // );
+    // #endif // NDEBUG
+    TangentExpr tangent;
+    posterior(point, pdf, tangent);
 }
 
 
@@ -179,15 +218,6 @@ auto SDMM<Vector_, Matrix_, TangentSpace_>::posterior(
 //     pdf_gaussian(point, pdf);
 //     pdf = enoki::hsum(weight * component_pdf);
 // }
-// 
-// template<typename Value, size_t MeanSize, size_t CovSize>
-// void SDMM<Value, MeanSize, CovSize>::posterior(
-//     const VectorS& point, Value& posterior
-// ) const {
-//     pdf_gaussian(point, posterior);
-//     posterior *= weight;
-// }
-// 
 
 }
 
