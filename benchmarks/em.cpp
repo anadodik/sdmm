@@ -45,9 +45,7 @@ void optimize_jmm(benchmark::State &state) {
     constexpr static size_t NPoints = 1000000;
 
     StepwiseEMType optimizer(
-        0.5,
-        Eigen::Matrix<Scalar, 5, 1>::Identity() * 1e-5,
-        1e-3
+        0.5, Eigen::Matrix<Scalar, 5, 1>::Identity() * 1e-5, 1e-3
     );
     SamplesType samples;
     samples.reserve(NPoints);
