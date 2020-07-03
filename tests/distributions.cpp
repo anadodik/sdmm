@@ -15,17 +15,15 @@ TEST_CASE("SDMM::pdf<float>") {
     using TangentSpace = sdmm::EuclidianTangentSpace<
         sdmm::Vector<Value, 2>, sdmm::Vector<Value, 2>
     >;
-    using SDMM = sdmm::SDMM<
-        sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, TangentSpace
-    >;
+    using SDMM = sdmm::SDMM<sdmm::Matrix<Value, 2>, TangentSpace>;
 
     SDMM distribution;
     distribution.weight.pmf = 1;
-    distribution.tangent_space.set_mean(sdmm::vector_t<SDMM>(0));
+    distribution.tangent_space.set_mean(sdmm::embedded_t<SDMM>(0));
     distribution.cov = enoki::diag<sdmm::matrix_t<SDMM>>({1, 2});;
     distribution.prepare_cov();
 
-    sdmm::vector_s_t<SDMM> point({1, 2});
+    sdmm::embedded_s_t<SDMM> point({1, 2});
     Value pdf(0);
     distribution.pdf_gaussian(point, pdf);
 
@@ -39,12 +37,10 @@ TEST_CASE("SDMM::pdf<Array>") {
     using TangentSpace = sdmm::EuclidianTangentSpace<
         sdmm::Vector<Value, 2>, sdmm::Vector<Value, 2>
     >;
-    using SDMM = sdmm::SDMM<
-        sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, TangentSpace
-    >;
+    using SDMM = sdmm::SDMM<sdmm::Matrix<Value, 2>, TangentSpace>;
     SDMM distribution;
     distribution.weight.pmf = Value(0.5, 0.5);
-    distribution.tangent_space.set_mean(sdmm::vector_t<SDMM>(0, 1));
+    distribution.tangent_space.set_mean(sdmm::embedded_t<SDMM>(0, 1));
     distribution.cov = sdmm::matrix_t<SDMM>(
         Value(3, 2), Value(0.5, 0),
         Value(0.5, 0), Value(1.4, 0.1)
@@ -53,7 +49,7 @@ TEST_CASE("SDMM::pdf<Array>") {
 
     Value pdf(0);
     SUBCASE("Calculating pdf for point={1, 2}.") {
-        sdmm::vector_s_t<SDMM> point({1, 2});
+        sdmm::embedded_s_t<SDMM> point({1, 2});
         distribution.pdf_gaussian(point, pdf);
 
         // Compare to results from NumPy
@@ -65,7 +61,7 @@ TEST_CASE("SDMM::pdf<Array>") {
     }
 
     SUBCASE("Calculating pdf for point={0, 0}.") {
-        sdmm::vector_s_t<SDMM> point({0, 0});
+        sdmm::embedded_s_t<SDMM> point({0, 0});
         distribution.pdf_gaussian(point, pdf);
         Value expected_pdf({
             0.054777174730721315f,
@@ -81,15 +77,13 @@ TEST_CASE("SDMM<SpatioDirectionalTangentSpace>") {
     using TangentSpace = sdmm::SpatioDirectionalTangentSpace<
         sdmm::Vector<Value, 4>, sdmm::Vector<Value, 3>
     >;
-    using SDMM = sdmm::SDMM<
-        sdmm::Vector<Value, 4>, sdmm::Matrix<Value, 3>, TangentSpace
-    >;
+    using SDMM = sdmm::SDMM<sdmm::Matrix<Value, 3>, TangentSpace >;
     SDMM distribution;
     enoki::set_slices(distribution, 2);
 
     distribution.weight.pmf = Value(0.2, 0.8);
     distribution.tangent_space.set_mean(
-        sdmm::vector_t<SDMM>(
+        sdmm::embedded_t<SDMM>(
             Value(2, 2), Value(0, 1), Value(1, 0), Value(0, 0)
         )
     );
@@ -102,7 +96,7 @@ TEST_CASE("SDMM<SpatioDirectionalTangentSpace>") {
     CHECK(sdmm::prepare(distribution));
     Value pdf(0);
     enoki::set_slices(pdf, 2);
-    sdmm::vector_s_t<SDMM> point({2, 1, 0, 0});
+    sdmm::embedded_s_t<SDMM> point({2, 1, 0, 0});
     enoki::vectorize(
         VECTORIZE_WRAP_MEMBER(pdf_gaussian),
         distribution,
@@ -119,15 +113,13 @@ TEST_CASE("SDMM<DirectionalTangentSpace>") {
     using TangentSpace = sdmm::DirectionalTangentSpace<
         sdmm::Vector<Value, 3>, sdmm::Vector<Value, 2>
     >;
-    using SDMM = sdmm::SDMM<
-        sdmm::Vector<Value, 3>, sdmm::Matrix<Value, 2>, TangentSpace
-    >;
+    using SDMM = sdmm::SDMM<sdmm::Matrix<Value, 2>, TangentSpace>;
     SDMM distribution;
     enoki::set_slices(distribution, 2);
 
     distribution.weight.pmf = Value(0.2, 0.8);
     distribution.tangent_space.set_mean(
-        sdmm::vector_t<SDMM>(
+        sdmm::embedded_t<SDMM>(
             Value(0, 1), Value(1, 0), Value(0, 0)
         )
     );
@@ -139,7 +131,7 @@ TEST_CASE("SDMM<DirectionalTangentSpace>") {
     CHECK(sdmm::prepare(distribution));
     Value pdf(0);
     enoki::set_slices(pdf, 2);
-    sdmm::vector_s_t<SDMM> point({1, 0, 0});
+    sdmm::embedded_s_t<SDMM> point({1, 0, 0});
     enoki::vectorize(
         VECTORIZE_WRAP_MEMBER(pdf_gaussian),
         distribution,
@@ -156,14 +148,12 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
     using TangentSpace = sdmm::EuclidianTangentSpace<
         sdmm::Vector<Value, 2>, sdmm::Vector<Value, 2>
     >;
-    using SDMM = sdmm::SDMM<
-        sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, TangentSpace
-    >;
+    using SDMM = sdmm::SDMM<sdmm::Matrix<Value, 2>, TangentSpace>;
     SDMM distribution;
     enoki::set_slices(distribution, 2);
     distribution.weight.pmf = Value(0.2, 0.8);
     distribution.tangent_space.set_mean(
-        sdmm::vector_t<SDMM>(
+        sdmm::embedded_t<SDMM>(
             Value(0, 0), Value(1, 1)
         )
     );
@@ -181,7 +171,7 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
     SUBCASE("Calculating pdf for point={1, 2}.") {
         Value pdf(0);
         enoki::set_slices(pdf, 2);
-        sdmm::vector_s_t<SDMM> point({1, 2});
+        sdmm::embedded_s_t<SDMM> point({1, 2});
         enoki::vectorize(
             VECTORIZE_WRAP_MEMBER(pdf_gaussian),
             distribution,
@@ -200,7 +190,7 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
     SUBCASE("Calculating pdf for point={0, 0}.") {
         Value pdf(0);
         enoki::set_slices(pdf, 2);
-        sdmm::vector_s_t<SDMM> point({0, 0});
+        sdmm::embedded_s_t<SDMM> point({0, 0});
         enoki::vectorize(
             VECTORIZE_WRAP_MEMBER(pdf_gaussian),
             distribution,
@@ -217,9 +207,9 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
     SUBCASE("Calculating pdf for point={0, 0}, external tangent vector.") {
         Value pdf(0);
         enoki::set_slices(pdf, 2);
-        sdmm::vector_t<SDMM> tangent_vectors;
+        sdmm::embedded_t<SDMM> tangent_vectors;
         enoki::set_slices(tangent_vectors, 2);
-        sdmm::vector_s_t<SDMM> point({0, 0});
+        sdmm::embedded_s_t<SDMM> point({0, 0});
         enoki::vectorize(
             VECTORIZE_WRAP_MEMBER(pdf_gaussian),
             distribution,
@@ -227,7 +217,7 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
             pdf,
             tangent_vectors
         );
-        CHECK(approx_equals(tangent_vectors, sdmm::vector_t<SDMM>(
+        CHECK(approx_equals(tangent_vectors, sdmm::embedded_t<SDMM>(
             Value(0, 0), Value(-1, -1)
         )));
     }
@@ -235,9 +225,9 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
     SUBCASE("Calculating posterior for point={1, 2}.") {
         Value posterior(0);
         enoki::set_slices(posterior, 2);
-        sdmm::vector_t<SDMM> tangent_vectors;
+        sdmm::embedded_t<SDMM> tangent_vectors;
         enoki::set_slices(tangent_vectors, 2);
-        sdmm::vector_s_t<SDMM> point({1, 2});
+        sdmm::embedded_s_t<SDMM> point({1, 2});
         enoki::vectorize_safe(
             VECTORIZE_WRAP_MEMBER(posterior),
             distribution,
@@ -259,30 +249,27 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
         using JointTangentSpace = sdmm::EuclidianTangentSpace<
             sdmm::Vector<Value, 4>, sdmm::Vector<Value, 4>
         >;
-        using JointSDMM = sdmm::SDMM<
-            sdmm::Vector<Value, 4>, sdmm::Matrix<Value, 4>, JointTangentSpace
-        >;
+        using JointSDMM = sdmm::SDMM<sdmm::Matrix<Value, 4>, JointTangentSpace>;
         using MarginalTangentSpace = sdmm::EuclidianTangentSpace<
             sdmm::Vector<Value, 2>, sdmm::Vector<Value, 2>
         >;
-        using MarginalSDMM = sdmm::SDMM<
-            sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, MarginalTangentSpace
-        >;
+        using MarginalSDMM = sdmm::SDMM<sdmm::Matrix<Value, 2>, MarginalTangentSpace>;
         using ConditionalTangentSpace = sdmm::EuclidianTangentSpace<
             sdmm::Vector<Value, 2>, sdmm::Vector<Value, 2>
         >;
         using ConditionalSDMM = sdmm::SDMM<
-            sdmm::Vector<Value, 2>, sdmm::Matrix<Value, 2>, ConditionalTangentSpace
+            sdmm::Matrix<Value, 2>, ConditionalTangentSpace
         >;
 
         using Conditioner = sdmm::SDMMConditioner<
             JointSDMM, MarginalSDMM, ConditionalSDMM
         >;
+
         JointSDMM distribution;
         enoki::set_slices(distribution, 2);
         distribution.weight.pmf = Value(0.2, 0.8);
         distribution.tangent_space.set_mean(
-            sdmm::vector_t<JointSDMM>(
+            sdmm::embedded_t<JointSDMM>(
                 Value(0, 0), Value(1, 1), Value(2, 2), Value(-1, 1)
             )
         );
@@ -319,7 +306,7 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
         CHECK(enoki::slice(expected_cov, 0) == enoki::slice(conditioner.conditional.cov, 0));
         CHECK(enoki::slice(expected_cov, 1) == enoki::slice(conditioner.conditional.cov, 1));
 
-        sdmm::vector_s_t<MarginalSDMM> point({1, 2});
+        sdmm::embedded_s_t<MarginalSDMM> point({1, 2});
         enoki::vectorize(
             VECTORIZE_WRAP_MEMBER(create_conditional_vectorized),
             conditioner,
@@ -333,7 +320,7 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
         CHECK(enoki::slice(expected_cov, 0) == enoki::slice(conditioner.conditional.cov, 0));
         CHECK(enoki::slice(expected_cov, 1) == enoki::slice(conditioner.conditional.cov, 1));
 
-        typename ConditionalSDMM::Vector expected_mean{
+        sdmm::embedded_t<ConditionalSDMM> expected_mean{
             Value(2.02278481012658, 2.05000000000000),
             Value(-0.78227848101265, 1.60000000000000)
         };

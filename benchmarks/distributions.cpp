@@ -129,25 +129,19 @@ void conditioning(benchmark::State &state) {
         sdmm::Vector<Value, JointSize>, sdmm::Vector<Value, JointSize>
     >;
     using JointSDMM = sdmm::SDMM<
-        sdmm::Vector<Value, JointSize>,
-        sdmm::Matrix<Value, JointSize>,
-        JointTangentSpace
+        sdmm::Matrix<Value, JointSize>, JointTangentSpace
     >;
     using MarginalTangentSpace = sdmm::EuclidianTangentSpace<
         sdmm::Vector<Value, MarginalSize>, sdmm::Vector<Value, MarginalSize>
     >;
     using MarginalSDMM = sdmm::SDMM<
-        sdmm::Vector<Value, MarginalSize>,
-        sdmm::Matrix<Value, MarginalSize>,
-        MarginalTangentSpace
+        sdmm::Matrix<Value, MarginalSize>, MarginalTangentSpace
     >;
     using ConditionalTangentSpace = sdmm::EuclidianTangentSpace<
         sdmm::Vector<Value, ConditionalSize>, sdmm::Vector<Value, ConditionalSize>
     >;
     using ConditionalSDMM = sdmm::SDMM<
-        sdmm::Vector<Value, ConditionalSize>,
-        sdmm::Matrix<Value, ConditionalSize>,
-        ConditionalTangentSpace
+        sdmm::Matrix<Value, ConditionalSize>, ConditionalTangentSpace
     >;
 
     using Conditioner = sdmm::SDMMConditioner<
@@ -158,7 +152,7 @@ void conditioning(benchmark::State &state) {
     JointSDMM distribution;
     enoki::set_slices(distribution, NComponents);
     distribution = enoki::zero<JointSDMM>(NComponents);
-    distribution.tangent_space.mean = enoki::full<sdmm::vector_s_t<JointSDMM>>(1, NComponents);
+    distribution.tangent_space.mean = enoki::full<sdmm::embedded_s_t<JointSDMM>>(1, NComponents);
     distribution.weight.pmf = enoki::full<decltype(distribution.weight.pmf)>(1.f / NComponents, NComponents);
     distribution.cov = enoki::identity<sdmm::matrix_t<JointSDMM>>(NComponents);
     assert(sdmm::prepare(distribution) == true);
@@ -169,8 +163,8 @@ void conditioning(benchmark::State &state) {
 
     Value pdf;
     enoki::set_slices(pdf, enoki::slices(distribution));
-    sdmm::vector_s_t<MarginalSDMM> point({1, 2, 2});
-    sdmm::vector_s_t<ConditionalSDMM> query({1, 2});
+    sdmm::embedded_s_t<MarginalSDMM> point({1, 2, 2});
+    sdmm::embedded_s_t<ConditionalSDMM> query({1, 2});
     float pdf_sum = 0;
     float n_repetitions = 0;
     sdmm::create_conditional(conditioner, point);
@@ -200,25 +194,19 @@ void conditioning_spatio_directional(benchmark::State &state) {
         sdmm::Vector<Value, JointSize + 1>, sdmm::Vector<Value, JointSize>
     >;
     using JointSDMM = sdmm::SDMM<
-        sdmm::Vector<Value, JointSize + 1>,
-        sdmm::Matrix<Value, JointSize>,
-        JointTangentSpace
+        sdmm::Matrix<Value, JointSize>, JointTangentSpace
     >;
     using MarginalTangentSpace = sdmm::EuclidianTangentSpace<
         sdmm::Vector<Value, MarginalSize>, sdmm::Vector<Value, MarginalSize>
     >;
     using MarginalSDMM = sdmm::SDMM<
-        sdmm::Vector<Value, MarginalSize>,
-        sdmm::Matrix<Value, MarginalSize>,
-        MarginalTangentSpace
+        sdmm::Matrix<Value, MarginalSize>, MarginalTangentSpace
     >;
     using ConditionalTangentSpace = sdmm::DirectionalTangentSpace<
         sdmm::Vector<Value, ConditionalSize + 1>, sdmm::Vector<Value, ConditionalSize>
     >;
     using ConditionalSDMM = sdmm::SDMM<
-        sdmm::Vector<Value, ConditionalSize + 1>,
-        sdmm::Matrix<Value, ConditionalSize>,
-        ConditionalTangentSpace
+        sdmm::Matrix<Value, ConditionalSize>, ConditionalTangentSpace
     >;
 
     using Conditioner = sdmm::SDMMConditioner<
@@ -230,7 +218,7 @@ void conditioning_spatio_directional(benchmark::State &state) {
     enoki::set_slices(distribution, NComponents);
     distribution = enoki::zero<JointSDMM>(NComponents);
     distribution.tangent_space.set_mean(
-        sdmm::vector_t<JointSDMM>{
+        sdmm::embedded_t<JointSDMM>{
         enoki::full<Value>(1, NComponents),
         enoki::full<Value>(1, NComponents),
         enoki::full<Value>(1, NComponents),
@@ -250,15 +238,15 @@ void conditioning_spatio_directional(benchmark::State &state) {
 
     Value pdf;
     enoki::set_slices(pdf, enoki::slices(distribution));
-    sdmm::vector_s_t<MarginalSDMM> point({1, 1, 1});
-    sdmm::vector_s_t<ConditionalSDMM> query({1, 0, 0});
+    sdmm::embedded_s_t<MarginalSDMM> point({1, 1, 1});
+    sdmm::embedded_s_t<ConditionalSDMM> query({1, 0, 0});
     float pdf_hsum = 0;
     float pdf_sum = 0;
     float n_repetitions = 0;
     int query_i = 0;
     for(auto _ : state) {
         sdmm::create_conditional(conditioner, point);
-        sdmm::vector_s_t<ConditionalSDMM>{Scalar(query_i % 3), Scalar((query_i + 1) % 3), Scalar((query_i + 2) % 3)};
+        sdmm::embedded_s_t<ConditionalSDMM>{Scalar(query_i % 3), Scalar((query_i + 1) % 3), Scalar((query_i + 2) % 3)};
         enoki::vectorize_safe(
             VECTORIZE_WRAP_MEMBER(posterior),
             conditioner.conditional,

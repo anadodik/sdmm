@@ -24,15 +24,6 @@ template<typename T>
 using tangent_space_t = typename T::TangentSpace;
 
 template<typename T>
-using vector_t = typename T::Vector;
-
-template<typename T>
-using vector_expr_t = typename T::VectorExpr;
-
-template<typename T>
-using vector_s_t = typename T::VectorS;
-
-template<typename T>
 using matrix_t = typename T::Matrix;
 
 template<typename T>
@@ -65,36 +56,34 @@ using replace_embedded_t = sdmm::Vector<T, SDMM::MeanSize>;
 template<typename SDMM, typename T>
 using replace_tangent_t = sdmm::Vector<T, SDMM::CovSize>;
 
-
-// TODO: Vector_ not necessary.
-template<typename Vector_, typename Matrix_, typename TangentSpace_>
+template<typename Matrix_, typename TangentSpace_>
 struct SDMM {
     static_assert(
-        std::is_same_v<enoki::scalar_t<Vector_>, enoki::scalar_t<Matrix_>>
+        std::is_same_v<
+            enoki::scalar_t<typename TangentSpace_::Tangent>,
+            enoki::scalar_t<Matrix_>
+        >
     );
 
-    static constexpr size_t MeanSize = enoki::array_size_v<Vector_>;
-    static constexpr size_t CovSize = enoki::array_size_v<Matrix_>;
-
     using TangentSpace = TangentSpace_;
-    using Vector = Vector_;
-    using Matrix = Matrix_;
     using Tangent = tangent_t<TangentSpace>;
     using Embedded = embedded_t<TangentSpace>;
-    using Scalar = enoki::value_t<Vector_>;
+    using Matrix = Matrix_;
+    using Scalar = enoki::value_t<Tangent>;
     using Mask = enoki::mask_t<Scalar>;
 
+    static constexpr size_t MeanSize = enoki::array_size_v<Embedded>;
+    static constexpr size_t CovSize = enoki::array_size_v<Matrix>;
+
     using ScalarExpr = enoki::expr_t<Scalar>;
-    using VectorExpr = enoki::expr_t<Vector>;
     using MatrixExpr = enoki::expr_t<Matrix>;
     using TangentExpr = tangent_expr_t<TangentSpace>;
     using EmbeddedExpr = embedded_expr_t<TangentSpace>;
     using MaskExpr = enoki::expr_t<Mask>;
 
     using ScalarS = enoki::scalar_t<Scalar>;
-    using VectorS = sdmm::Vector<ScalarS, MeanSize>;
-    using TangentS = sdmm::Vector<ScalarS, CovSize>;
-    using EmbeddedS = sdmm::Vector<ScalarS, MeanSize>;
+    using TangentS = tangent_s_t<TangentSpace>;
+    using EmbeddedS = embedded_s_t<TangentSpace>;
     using MatrixS = sdmm::Matrix<ScalarS, CovSize>;
     using MaskS = enoki::mask_t<ScalarS>;
 
@@ -158,8 +147,8 @@ template<typename SDMM>
 }
 
 // TODO: make [[nodiscard]] and check cov_is_psd
-template<typename Vector_, typename Matrix_, typename TangentSpace_>
-auto SDMM<Vector_, Matrix_, TangentSpace_>::prepare_cov() -> void {
+template<typename Matrix_, typename TangentSpace_>
+auto SDMM<Matrix_, TangentSpace_>::prepare_cov() -> void {
     sdmm::linalg::cholesky(cov, cov_sqrt, cov_is_psd);
     inv_cov_sqrt_det = 1.f / enoki::hprod(enoki::diag(cov_sqrt));
     assert(enoki::all(cov_is_psd));
@@ -175,9 +164,9 @@ auto box_mueller_transform(const Value& u1, const Value& u2)
     return {sin * radius, cos * radius};
 }
 
-template<typename Vector_, typename Matrix_, typename TangentSpace_>
+template<typename Matrix_, typename TangentSpace_>
 template<typename RNG, typename EmbeddedIn, typename TangentIn>
-auto SDMM<Vector_, Matrix_, TangentSpace_>::sample(
+auto SDMM<Matrix_, TangentSpace_>::sample(
     RNG& rng, EmbeddedIn& sample, Scalar& pdf, TangentIn& tangent
 ) const -> void {
     for(size_t dim_i = 0; dim_i < CovSize; dim_i += 2) {
@@ -220,17 +209,17 @@ auto SDMM<Vector_, Matrix_, TangentSpace_>::sample(
     }
 }
 
-template<typename Vector_, typename Matrix_, typename TangentSpace_>
-auto SDMM<Vector_, Matrix_, TangentSpace_>::to_standard_normal(
+template<typename Matrix_, typename TangentSpace_>
+auto SDMM<Matrix_, TangentSpace_>::to_standard_normal(
     const Tangent& point
 ) const -> TangentExpr {
     TangentExpr standardized;
     return sdmm::linalg::solve(cov_sqrt, point);
 }
 
-template<typename Vector_, typename Matrix_, typename TangentSpace_>
+template<typename Matrix_, typename TangentSpace_>
 template<typename EmbeddedIn, typename TangentIn>
-auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
+auto SDMM<Matrix_, TangentSpace_>::pdf_gaussian(
     const EmbeddedIn& point, Scalar& pdf, TangentIn& tangent
 ) const -> void {
     ScalarExpr inv_jacobian;
@@ -244,9 +233,9 @@ auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
         enoki::exp(ScalarS(-0.5) * squared_norm);
 }
 
-template<typename Vector_, typename Matrix_, typename TangentSpace_>
+template<typename Matrix_, typename TangentSpace_>
 template<typename EmbeddedIn>
-auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
+auto SDMM<Matrix_, TangentSpace_>::pdf_gaussian(
     const EmbeddedIn& point, Scalar& pdf
 ) const -> void {
     // #ifdef NDEBUG
@@ -259,18 +248,18 @@ auto SDMM<Vector_, Matrix_, TangentSpace_>::pdf_gaussian(
     pdf_gaussian(point, pdf, tangent);
 }
 
-template<typename Vector_, typename Matrix_, typename TangentSpace_>
+template<typename Matrix_, typename TangentSpace_>
 template<typename EmbeddedIn, typename TangentIn>
-auto SDMM<Vector_, Matrix_, TangentSpace_>::posterior(
+auto SDMM<Matrix_, TangentSpace_>::posterior(
     const EmbeddedIn& point, Scalar& posterior, TangentIn& tangent
 ) const -> void {
     pdf_gaussian(point, posterior, tangent);
     posterior *= weight.pmf;
 }
 
-template<typename Vector_, typename Matrix_, typename TangentSpace_>
+template<typename Matrix_, typename TangentSpace_>
 template<typename EmbeddedIn>
-auto SDMM<Vector_, Matrix_, TangentSpace_>::posterior(
+auto SDMM<Matrix_, TangentSpace_>::posterior(
     const EmbeddedIn& point, Scalar& pdf
 ) const -> void {
     // #ifdef NDEBUG

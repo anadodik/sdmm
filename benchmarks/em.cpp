@@ -93,9 +93,7 @@ void optimize(benchmark::State &state) {
         sdmm::Vector<Value, JointSize + 1>, sdmm::Vector<Value, JointSize>
     >;
     using JointSDMM = sdmm::SDMM<
-        sdmm::Vector<Value, JointSize + 1>,
-        sdmm::Matrix<Value, JointSize>,
-        JointTangentSpace
+        sdmm::Matrix<Value, JointSize>, JointTangentSpace
     >;
     using JointCov = sdmm::matrix_t<JointSDMM>;
     using JointEmbedded = sdmm::embedded_t<JointSDMM>;

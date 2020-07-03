@@ -40,23 +40,23 @@ struct SDMMConditioner {
     using MarginalTangentSpace = tangent_space_t<Marginal>;
     using ConditionalTangentSpace = tangent_space_t<Conditional>;
 
-    using ScalarExpr = enoki::expr_t<enoki::value_t<vector_t<Joint>>>;
+    using ScalarExpr = enoki::expr_t<enoki::value_t<embedded_t<Joint>>>;
     using JointMatrix = matrix_t<Joint>;
-    using MarginalVectorS = vector_s_t<Marginal>;
+    using MarginalEmbeddedS = embedded_s_t<Marginal>;
     using MeanTransformMatrix = typename JointMatrix::template ReplaceSize<
         ConditionalSize, MarginalSize
     >;
-    using MarginalVector = typename Marginal::Vector;
+    using MarginalEmbedded = typename Marginal::Embedded;
 
     auto prepare_vectorized(const Joint& joint) -> void;
-    auto create_conditional_vectorized(const MarginalVectorS& point) -> void;
+    auto create_conditional_vectorized(const MarginalEmbeddedS& point) -> void;
 
     Marginal marginal;
     Conditional conditional;
 
     MeanTransformMatrix mean_transform;
     ConditionalTangentSpace tangent_space;
-    MarginalVector marginal_tangents;
+    MarginalEmbedded marginal_tangents;
 
     ENOKI_STRUCT(SDMMConditioner, marginal, conditional, mean_transform, tangent_space, marginal_tangents);
 };
@@ -75,7 +75,7 @@ inline auto prepare(
 template<typename Conditioner>
 inline auto create_conditional(
     // cannot declare point as const because enoki complains
-    Conditioner& conditioner, typename Conditioner::MarginalVectorS& point
+    Conditioner& conditioner, typename Conditioner::MarginalEmbeddedS& point
 ) -> void {
     enoki::vectorize_safe(
         VECTORIZE_WRAP_MEMBER(create_conditional_vectorized), conditioner, point
@@ -125,7 +125,7 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::prepare_vectorized(
 
 template<typename Joint_, typename Marginal_, typename Conditional_>
 auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_vectorized(
-    const MarginalVectorS& point
+    const MarginalEmbeddedS& point
 ) -> void {
     ScalarExpr inv_jacobian_to, inv_jacobian_from;
     conditional.tangent_space.set_mean(
