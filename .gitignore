@@ -1,2 +1,5 @@
 build
 .ccls-cache
+*.pdf
+**/.DS_Store
+**/._.DS_Store
