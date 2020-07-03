@@ -65,7 +65,6 @@ add_executable(
     tests/distributions.cpp
     tests/matrix.cpp
     tests/spaces.cpp
-    tests/minimal.cpp
 )
 target_compile_features(tests PRIVATE cxx_std_17)
 target_include_directories(tests PRIVATE tests)
@@ -96,11 +95,29 @@ find_package(Boost 1.66 REQUIRED COMPONENTS
     serialization
 )
 
-add_executable(benchmarks benchmarks/distributions.cpp benchmarks/em.cpp)
-target_compile_definitions(benchmarks PRIVATE COMPARISON=1)
+add_executable(
+    benchmarks
+
+    benchmarks/distributions.cpp
+    benchmarks/em.cpp
+    benchmarks/sampling.cpp
+)
+target_compile_definitions(benchmarks PRIVATE COMPARISON=0)
 target_compile_features(benchmarks PRIVATE cxx_std_17)
 target_include_directories(benchmarks PRIVATE benchmark::benchmark)
-target_link_libraries(benchmarks PRIVATE sdmm benchmark::benchmark Eigen3::Eigen Boost::system Boost::filesystem Boost::thread Boost::serialization jmm jmm_interface)
+target_link_libraries(
+    benchmarks
+
+    PRIVATE
+    sdmm
+    benchmark::benchmark
+    Eigen3::Eigen
+    Boost::system Boost::filesystem
+    Boost::thread
+    Boost::serialization
+    jmm
+    jmm_interface
+)
 
 # find_package(OpenMP)
 # 

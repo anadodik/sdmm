@@ -74,6 +74,9 @@ template<typename Value_>
     }
 
     size_t n_slices = enoki::slices(pmf);
+    if(enoki::slices(cdf) != n_slices) {
+        enoki::set_slices(cdf, n_slices);
+    }
     enoki::slice(cdf, 0) = enoki::slice(pmf, 0);
     for(size_t i = 1; i < n_slices; ++i) {
         enoki::slice(cdf, i) = enoki::slice(cdf, i - 1) + enoki::slice(pmf, i);

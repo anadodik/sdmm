@@ -5,6 +5,7 @@
 #include <enoki/array.h>
 #include <enoki/dynamic.h>
 #include <enoki/matrix.h>
+#include <enoki/random.h>
 
 #include <fmt/ostream.h>
 #include <spdlog/spdlog.h>
@@ -44,13 +45,25 @@ template<typename T>
 using tangent_t = typename T::Tangent;
 
 template<typename T>
+using tangent_s_t = typename T::TangentS;
+
+template<typename T>
 using tangent_expr_t = typename T::TangentExpr;
 
 template<typename T>
 using embedded_t = typename T::Embedded;
 
 template<typename T>
+using embedded_s_t = typename T::EmbeddedS;
+
+template<typename T>
 using embedded_expr_t = typename T::EmbeddedExpr;
+
+template<typename SDMM, typename T>
+using replace_embedded_t = sdmm::Vector<T, SDMM::MeanSize>;
+
+template<typename SDMM, typename T>
+using replace_tangent_t = sdmm::Vector<T, SDMM::CovSize>;
 
 
 // TODO: Vector_ not necessary.
@@ -80,12 +93,17 @@ struct SDMM {
 
     using ScalarS = enoki::scalar_t<Scalar>;
     using VectorS = sdmm::Vector<ScalarS, MeanSize>;
+    using TangentS = sdmm::Vector<ScalarS, CovSize>;
+    using EmbeddedS = sdmm::Vector<ScalarS, MeanSize>;
     using MatrixS = sdmm::Matrix<ScalarS, CovSize>;
     using MaskS = enoki::mask_t<ScalarS>;
 
     using Packet = nested_packet_t<Scalar>;
 
     auto prepare_cov() -> void;
+
+    template<typename RNG, typename EmbeddedIn, typename TangentIn>
+    auto sample(RNG& rng, EmbeddedIn& sample, Scalar& pdf, TangentIn& tangent) const -> void;
 
     template<typename EmbeddedIn, typename TangentIn>
     auto pdf_gaussian(const EmbeddedIn& point, Scalar& pdf, TangentIn& tangent) const -> void;
@@ -100,6 +118,7 @@ struct SDMM {
     auto posterior(const EmbeddedIn& point, Scalar& posterior) const -> void;
 
     auto to_standard_normal(const Tangent& point) const -> TangentExpr;
+
 
     // Make sure to update the ENOKI_STRUCT and ENOKI_STRUCT_SUPPORT
     // declarations when modifying these variables.
@@ -144,6 +163,61 @@ auto SDMM<Vector_, Matrix_, TangentSpace_>::prepare_cov() -> void {
     sdmm::linalg::cholesky(cov, cov_sqrt, cov_is_psd);
     inv_cov_sqrt_det = 1.f / enoki::hprod(enoki::diag(cov_sqrt));
     assert(enoki::all(cov_is_psd));
+}
+
+template<typename Value>
+auto box_mueller_transform(const Value& u1, const Value& u2)
+        -> std::pair<enoki::expr_t<Value>, enoki::expr_t<Value>> {
+    using ValueExpr = enoki::expr_t<Value>;
+    ValueExpr radius = enoki::sqrt(-2 * enoki::log(1 - u1));
+    ValueExpr theta = 2 * M_PI * u2;
+    auto [sin, cos] = enoki::sincos(theta);
+    return {sin * radius, cos * radius};
+}
+
+template<typename Vector_, typename Matrix_, typename TangentSpace_>
+template<typename RNG, typename EmbeddedIn, typename TangentIn>
+auto SDMM<Vector_, Matrix_, TangentSpace_>::sample(
+    RNG& rng, EmbeddedIn& sample, Scalar& pdf, TangentIn& tangent
+) const -> void {
+    for(size_t dim_i = 0; dim_i < CovSize; dim_i += 2) {
+        auto [u1, u2] = box_mueller_transform(
+            rng.next_float32(), rng.next_float32()
+        );
+        tangent.coeff(dim_i) = u1;
+        if(dim_i + 1 < CovSize) {
+            tangent.coeff(dim_i + 1) = u2;
+        }
+    }
+
+    using Float32 = typename RNG::Float32;
+    using UInt32 = typename RNG::UInt32;
+    auto weight_inv_sample = rng.next_float32();
+    UInt32 weight_indices = enoki::binary_search(
+        0,
+        enoki::slices(weight.cdf),
+        [&](UInt32 index) {
+            return enoki::gather<Float32>(weight.cdf, index) < weight_inv_sample;
+        }
+    );
+    Matrix sampled_cov_sqrt;
+    enoki::set_slices(sampled_cov_sqrt, enoki::slices(weight_inv_sample));
+    for(int mat_i = 0; mat_i < enoki::slices(weight_inv_sample); ++mat_i) {
+        uint32_t index = weight_indices.coeff(mat_i);
+        enoki::slice(sampled_cov_sqrt, mat_i) = enoki::slice(cov_sqrt, index);
+    }
+    // TODO: ^gather
+    // auto covs = enoki::gather<Matrix, sizeof(MatrixS)>(cov_sqrt.data(), weight_indices);
+    tangent = sampled_cov_sqrt * tangent;
+    if(enoki::slices(sample) != enoki::slices(weight_inv_sample)) {
+        enoki::set_slices(sample, enoki::slices(weight_inv_sample)); 
+    }
+    for(int ts_i = 0; ts_i < enoki::slices(weight_inv_sample); ++ts_i) {
+        enoki::slice(sample, ts_i) =
+            enoki::slice(tangent_space, ts_i).from(
+                enoki::slice(tangent, ts_i), enoki::slice(pdf, ts_i)
+            );
+    }
 }
 
 template<typename Vector_, typename Matrix_, typename TangentSpace_>

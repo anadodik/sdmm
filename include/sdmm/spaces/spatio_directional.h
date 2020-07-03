@@ -59,12 +59,12 @@ struct SpatioDirectionalTangentSpace {
         const ScalarExpr& directional2,
         const ScalarExpr& directional3
     ) const -> EmbeddedExpr {
-        return {
+        return EmbeddedExpr(
             (tangent.coeff(Indices) + mean.coeff(Indices))...,
             directional1,
             directional2,
             directional3
-        };
+        );
     }
 
     template<typename EmbeddedIn, std::enable_if_t<EmbeddedIn::Size == Embedded::Size, int> = 0>
@@ -123,7 +123,7 @@ struct SpatioDirectionalTangentSpace {
             sinc_angle / length
         );
 
-        inv_jacobian = enoki::select(length > M_PI, sinc_angle, 0);
+        inv_jacobian = enoki::select(length < M_PI, sinc_angle, 0);
         const DirectionalEmbeddedExpr embedded_local{
             directional_tangent.x() * sinc_angle,
             directional_tangent.y() * sinc_angle,
@@ -133,7 +133,7 @@ struct SpatioDirectionalTangentSpace {
 
         return from_unwrap(
             tangent,
-            std::make_index_sequence<Embedded::Size - 3>{},
+            std::make_index_sequence<Tangent::Size - 2>{},
             embedded.x(),
             embedded.y(),
             embedded.z()

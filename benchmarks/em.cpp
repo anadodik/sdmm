@@ -86,9 +86,6 @@ BENCHMARK(optimize_jmm)->Unit(benchmark::kMillisecond);
 template<size_t PacketSize>
 void optimize(benchmark::State &state) {
     constexpr static size_t JointSize = 5;
-    constexpr static size_t MarginalSize = 3;
-    constexpr static size_t ConditionalSize = 2;
-    static_assert(JointSize == MarginalSize + ConditionalSize);
 
     using Packet = enoki::Packet<Scalar, PacketSize>;
     using Value = enoki::DynamicArray<Packet>;

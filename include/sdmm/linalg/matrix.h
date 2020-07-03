@@ -124,7 +124,7 @@ ENOKI_INLINE Result operator*(const Matrix<T0, Rows1, Cols1> &m0,
     for (size_t j = 0; j < Cols2; ++j) {
         Column sum = m0.coeff(0) * Column::full_(m1(0, j), 1);
         for (size_t i = 1; i < Cols1; ++i)
-            sum = fmadd(m0.coeff(i), Column::full_(m1(i, j), 1), sum);
+            sum = enoki::fmadd(m0.coeff(i), Column::full_(m1(i, j), 1), sum);
         result.coeff(j) = sum;
     }
 
@@ -139,13 +139,13 @@ ENOKI_INLINE auto operator*(const sdmm::linalg::Matrix<T0, Rows, Cols> &m, const
         EVector sum = enoki::zero<EVector>();
         for (size_t c = 0; c < Cols; ++c) {
             for (size_t r = 0; r < Rows; ++r) {
-                sum.coeff(r) = fmadd(m(r, c), s.coeff(c), sum.coeff(r));
+                sum.coeff(r) = enoki::fmadd(m(r, c), s.coeff(c), sum.coeff(r));
             }
         }
         return sum;
         // EVector sum = m.coeff(0) * EVector::full_(s.coeff(0), 1);
         // for (size_t i = 1; i < Cols; ++i) {
-        //     sum = fmadd(m.coeff(i), EVector::full_(s.coeff(i), 1), sum);
+        //     sum = enoki::fmadd(m.coeff(i), EVector::full_(s.coeff(i), 1), sum);
         // }
         // return sum;
     } else {
