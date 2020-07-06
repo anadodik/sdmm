@@ -116,6 +116,7 @@ TEST_CASE("sampling/pdf comparison") {
 
     RNG rng;
     RNG jmm_rng;
+    enoki::PCG32<float> init_rng;
 
     #if COMPARISON == 1
     constexpr static int t_dims = 6;
@@ -139,8 +140,16 @@ TEST_CASE("sampling/pdf comparison") {
     auto conditional = MMCond();
     jmm_distribution.setNComponents(t_components);
     conditional.setNComponents(t_components);
-    MM::Vectord mean; mean << 1, 1, 1, 0, 0, 1;
     for(int i = 0; i < t_components; ++i) {
+        MM::Vectord mean;
+        mean << 
+            init_rng.next_float32(),
+            init_rng.next_float32(),
+            init_rng.next_float32(),
+            init_rng.next_float32(),
+            init_rng.next_float32(),
+            init_rng.next_float32();
+        mean.bottomRows(3) /= mean.bottomRows(3).norm();
         jmm_distribution.weights()[i] = 1.f / Scalar(t_components);
         jmm_distribution.components()[i].set(
             mean,

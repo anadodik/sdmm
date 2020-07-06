@@ -261,27 +261,27 @@ public:
         bool isInside;
         for(int component_i = 0; component_i < m_lastIdx; ++component_i) {
             auto& marginal = m_marginals[component_i];
-            if(!marginal.isInsideAABB(condition)) {
-                weights[component_i] = 0;
-                continue;
-            }
+            // if(!marginal.isInsideAABB(condition)) {
+            //     weights[component_i] = 0;
+            //     continue;
+            // }
             Scalar marginalPdf = marginal.pdf(condition, isInside);
-            if(!isInside) {
-                weights[component_i] = 0;
-                continue;
-            }
+            // if(!isInside) {
+            //     weights[component_i] = 0;
+            //     continue;
+            // }
             weights[component_i] = m_weights[component_i] * marginalPdf;
             totalMass += weights[component_i];
         }
-        Scalar totalMassCutoff = 0.99f * totalMass;
+        Scalar totalMassCutoff = 1; // 0.99f * totalMass;
 
-        std::sort(
-            std::begin(idcs),
-            std::begin(idcs) + m_lastIdx,
-            [&weights](int idx1, int idx2) {
-                return weights[idx1] > weights[idx2];
-            }
-        );
+        // std::sort(
+        //     std::begin(idcs),
+        //     std::begin(idcs) + m_lastIdx,
+        //     [&weights](int idx1, int idx2) {
+        //         return weights[idx1] > weights[idx2];
+        //     }
+        // );
 
         Scalar accumMass = 0.f;
         int lastIdx;
