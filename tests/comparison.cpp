@@ -16,18 +16,57 @@
 
 using Scalar = float;
 
+template<typename JMM, typename SDMM, size_t... Indices>
+void copy_means(
+    JMM& jmm, SDMM& sdmm, std::index_sequence<Indices...> 
+) {
+    size_t NComponents = jmm.nComponents();
+    for(size_t component_i = 0; component_i < NComponents; ++component_i) {
+        enoki::slice(sdmm.tangent_space, component_i).set_mean(
+            sdmm::embedded_s_t<SDMM>(
+                jmm.components()[component_i].mean()(Indices)...
+            )
+        );
+    }
+}
+
+template<typename JMM, typename SDMM, size_t... Indices>
+void copy_covs(
+    JMM& jmm, SDMM& sdmm, std::index_sequence<Indices...> 
+) {
+    size_t NComponents = jmm.nComponents();
+    for(size_t component_i = 0; component_i < NComponents; ++component_i) {
+        enoki::slice(sdmm.cov, component_i) = sdmm::matrix_s_t<SDMM>(
+            jmm.components()[component_i].cov()(Indices)...
+        );
+    }
+}
+
+template<typename JMM, typename SDMM>
+void copy_sdmm(JMM& jmm, SDMM& sdmm) {
+    size_t NComponents = jmm.nComponents();
+    enoki::set_slices(sdmm, NComponents);
+    copy_means(jmm, sdmm, std::make_index_sequence<SDMM::Embedded::Size>{});
+    copy_covs(jmm, sdmm, std::make_index_sequence<SDMM::Tangent::Size * SDMM::Tangent::Size>{});
+    for(size_t component_i = 0; component_i < NComponents; ++component_i) {
+        enoki::slice(sdmm.weight.pmf, component_i) = jmm.weights()[component_i];
+    }
+    bool prepare_success = sdmm::prepare(sdmm);
+    CHECK_EQ(prepare_success, true);
+}
+
 template<typename Value, typename JointSDMM, size_t NComponents>
-void set_up_sdmm(JointSDMM& distribution) {
+void init_sdmm(JointSDMM& distribution) {
     enoki::set_slices(distribution, NComponents);
     distribution = enoki::zero<JointSDMM>(NComponents);
     distribution.tangent_space.set_mean(
         sdmm::embedded_t<JointSDMM>{
-        enoki::full<Value>(1, NComponents),
-        enoki::full<Value>(1, NComponents),
-        enoki::full<Value>(1, NComponents),
-        enoki::full<Value>(0, NComponents),
-        enoki::full<Value>(0, NComponents),
-        enoki::full<Value>(1, NComponents)
+            enoki::full<Value>(1, NComponents),
+            enoki::full<Value>(1, NComponents),
+            enoki::full<Value>(1, NComponents),
+            enoki::full<Value>(0, NComponents),
+            enoki::full<Value>(0, NComponents),
+            enoki::full<Value>(1, NComponents)
         }
     );
     distribution.weight.pmf =
@@ -78,16 +117,6 @@ TEST_CASE("sampling/pdf comparison") {
     RNG rng;
     RNG jmm_rng;
 
-    JointSDMM distribution;
-    set_up_sdmm<Value, JointSDMM, NComponents>(distribution);
-
-    Conditioner conditioner;
-    enoki::set_slices(conditioner, enoki::slices(distribution));
-    sdmm::prepare(conditioner, distribution);
-
-    sdmm::embedded_s_t<MarginalSDMM> point({1, 1, 1});
-    sdmm::create_conditional(conditioner, point);
-
     #if COMPARISON == 1
     constexpr static int t_dims = 6;
     constexpr static int t_conditionalDims = 3;
@@ -133,6 +162,16 @@ TEST_CASE("sampling/pdf comparison") {
     spdlog::info("jmm_pdf={}", jmm_pdf);
 
     #endif // COMPARISON == 1
+
+    JointSDMM distribution;
+    copy_sdmm(jmm_distribution, distribution);
+
+    Conditioner conditioner;
+    enoki::set_slices(conditioner, enoki::slices(distribution));
+    sdmm::prepare(conditioner, distribution);
+
+    sdmm::embedded_s_t<MarginalSDMM> point({1, 1, 1});
+    sdmm::create_conditional(conditioner, point);
 
     Value inv_jacobian;
     enoki::set_slices(inv_jacobian, enoki::slices(distribution));
