@@ -60,20 +60,20 @@ template<typename Matrix_, typename TangentSpace_>
 struct SDMM {
     static_assert(
         std::is_same_v<
-            enoki::scalar_t<typename TangentSpace_::Tangent>,
-            enoki::scalar_t<Matrix_>
+            enoki::scalar_t<tangent_t<TangentSpace_>>, enoki::scalar_t<Matrix_>
         >
     );
+    static_assert(tangent_t<TangentSpace_>::Size == Matrix_::Size);
 
     using TangentSpace = TangentSpace_;
     using Tangent = tangent_t<TangentSpace>;
     using Embedded = embedded_t<TangentSpace>;
-    using Matrix = Matrix_;
     using Scalar = enoki::value_t<Tangent>;
     using Mask = enoki::mask_t<Scalar>;
+    using Matrix = Matrix_;
 
     static constexpr size_t MeanSize = enoki::array_size_v<Embedded>;
-    static constexpr size_t CovSize = enoki::array_size_v<Matrix>;
+    static constexpr size_t CovSize = enoki::array_size_v<Tangent>;
 
     using ScalarExpr = enoki::expr_t<Scalar>;
     using MatrixExpr = enoki::expr_t<Matrix>;
@@ -92,7 +92,7 @@ struct SDMM {
     auto prepare_cov() -> void;
 
     template<typename RNG, typename EmbeddedIn, typename TangentIn>
-    auto sample(RNG& rng, EmbeddedIn& sample, Scalar& pdf, TangentIn& tangent) const -> void;
+    auto sample(RNG& rng, EmbeddedIn& sample, Scalar& inv_jacobian, TangentIn& tangent) const -> void;
 
     template<typename EmbeddedIn, typename TangentIn>
     auto pdf_gaussian(const EmbeddedIn& point, Scalar& pdf, TangentIn& tangent) const -> void;
@@ -167,8 +167,19 @@ auto box_mueller_transform(const Value& u1, const Value& u2)
 template<typename Matrix_, typename TangentSpace_>
 template<typename RNG, typename EmbeddedIn, typename TangentIn>
 auto SDMM<Matrix_, TangentSpace_>::sample(
-    RNG& rng, EmbeddedIn& sample, Scalar& pdf, TangentIn& tangent
+    RNG& rng, EmbeddedIn& sample, Scalar& inv_jacobian, TangentIn& tangent
 ) const -> void {
+    auto weight_inv_sample = rng.next_float32();
+    using Float32 = typename RNG::Float32;
+    using UInt32 = typename RNG::UInt32;
+    UInt32 gaussian_idx = enoki::binary_search(
+        0,
+        enoki::slices(weight.cdf),
+        [&](UInt32 index) {
+            return enoki::gather<Float32>(weight.cdf, index) < weight_inv_sample;
+        }
+    );
+
     for(size_t dim_i = 0; dim_i < CovSize; dim_i += 2) {
         auto [u1, u2] = box_mueller_transform(
             rng.next_float32(), rng.next_float32()
@@ -179,32 +190,26 @@ auto SDMM<Matrix_, TangentSpace_>::sample(
         }
     }
 
-    using Float32 = typename RNG::Float32;
-    using UInt32 = typename RNG::UInt32;
-    auto weight_inv_sample = rng.next_float32();
-    UInt32 weight_indices = enoki::binary_search(
-        0,
-        enoki::slices(weight.cdf),
-        [&](UInt32 index) {
-            return enoki::gather<Float32>(weight.cdf, index) < weight_inv_sample;
-        }
-    );
     Matrix sampled_cov_sqrt;
-    enoki::set_slices(sampled_cov_sqrt, enoki::slices(weight_inv_sample));
-    for(int mat_i = 0; mat_i < enoki::slices(weight_inv_sample); ++mat_i) {
-        uint32_t index = weight_indices.coeff(mat_i);
+    enoki::set_slices(sampled_cov_sqrt, enoki::slices(gaussian_idx));
+    for(size_t mat_i = 0; mat_i < enoki::slices(gaussian_idx); ++mat_i) {
+        uint32_t index = gaussian_idx.coeff(mat_i);
         enoki::slice(sampled_cov_sqrt, mat_i) = enoki::slice(cov_sqrt, index);
     }
     // TODO: ^gather
     // auto covs = enoki::gather<Matrix, sizeof(MatrixS)>(cov_sqrt.data(), weight_indices);
     tangent = sampled_cov_sqrt * tangent;
-    if(enoki::slices(sample) != enoki::slices(weight_inv_sample)) {
-        enoki::set_slices(sample, enoki::slices(weight_inv_sample)); 
+    if(enoki::slices(sample) != enoki::slices(gaussian_idx)) {
+        enoki::set_slices(sample, enoki::slices(gaussian_idx)); 
     }
-    for(int ts_i = 0; ts_i < enoki::slices(weight_inv_sample); ++ts_i) {
+    if(enoki::slices(inv_jacobian) != enoki::slices(gaussian_idx)) {
+        enoki::set_slices(inv_jacobian, enoki::slices(gaussian_idx)); 
+    }
+    for(size_t ts_i = 0; ts_i < enoki::slices(gaussian_idx); ++ts_i) {
+        uint32_t index = gaussian_idx.coeff(ts_i);
         enoki::slice(sample, ts_i) =
-            enoki::slice(tangent_space, ts_i).from(
-                enoki::slice(tangent, ts_i), enoki::slice(pdf, ts_i)
+            enoki::slice(tangent_space, index).from(
+                enoki::slice(tangent, ts_i), enoki::slice(inv_jacobian, ts_i)
             );
     }
 }

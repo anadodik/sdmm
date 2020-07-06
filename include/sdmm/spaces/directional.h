@@ -65,7 +65,7 @@ struct DirectionalTangentSpace {
         ScalarExpr sinc_angle = enoki::select(
             sin_angle < 1e-4,
             ScalarExpr(1),
-            sinc_angle / length
+            sin_angle / length
         );
 
         EmbeddedExpr embedded_local{
@@ -73,7 +73,7 @@ struct DirectionalTangentSpace {
             tangent.y() * sinc_angle,
             cos_angle
         };
-        inv_jacobian = enoki::select(length > M_PI, sinc_angle, 0);
+        inv_jacobian = enoki::select(length < M_PI, sinc_angle, 0);
 
         return coordinate_system.from * embedded_local;
     }

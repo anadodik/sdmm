@@ -19,7 +19,6 @@ struct CoordinateSystem {
     using VectorExpr = enoki::expr_t<Vector>;
 
     auto prepare(const Vector& n_) -> void {
-        from.col(2) = n_;
         /* Based on "Building an Orthonormal Basis, Revisited" by
            Tom Duff, James Burgess, Per Christensen,
            Christophe Hery, Andrew Kensler, Max Liani,
@@ -29,12 +28,13 @@ struct CoordinateSystem {
               a    = -enoki::rcp(sign + n_.z()),
               b    = n_.x() * n_.y() * a;
 
-        from.col(0) = VectorExpr(
+        from.col(1) = VectorExpr(
             enoki::mulsign(enoki::sqr(n_.x()) * a, n_.z()) + 1.f,
             enoki::mulsign(b, n_.z()),
             enoki::mulsign_neg(n_.x(), n_.z())
         );
-        from.col(1) = VectorExpr(b, sign + enoki::sqr(n_.y()) * a, -n_.y());
+        from.col(0) = VectorExpr(b, sign + enoki::sqr(n_.y()) * a, -n_.y());
+        from.col(2) = n_;
         // from = Rotation::from_cols(s, t, n);
         to = linalg::transpose(from);
     }

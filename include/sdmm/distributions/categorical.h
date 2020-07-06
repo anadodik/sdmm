@@ -22,7 +22,7 @@ struct Categorical {
     Value cdf;
 
     BoolOuter prepare();
-    void normalize_cdf(const ValueOuter& inv_normalizer);
+    void normalize(const ValueOuter& inv_normalizer);
 
     ENOKI_STRUCT(Categorical, pmf, cdf);
 };
@@ -56,10 +56,11 @@ template<typename Value_, std::enable_if_t<!enoki::is_array_v<typename Categoric
 }
 
 template<typename Value_>
-auto Categorical<Value_>::normalize_cdf(
+auto Categorical<Value_>::normalize(
     const ValueOuter& inv_normalizer
 ) -> void {
     cdf *= inv_normalizer;
+    pmf *= inv_normalizer;
 }
 
 template<typename Value_>
@@ -87,11 +88,9 @@ template<typename Value_>
 
     // This can be further optimized by
     // only iterating over cdfs which have non-zero sums.
-    // normalize_cdf(inv_normalizer);
+    // normalize(inv_normalizer);
     enoki::vectorize(
-        VECTORIZE_WRAP_MEMBER(normalize_cdf),
-        *this,
-        inv_normalizer
+        VECTORIZE_WRAP_MEMBER(normalize), *this, inv_normalizer
     );
 
     return valid;

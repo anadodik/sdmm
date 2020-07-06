@@ -20,14 +20,12 @@ struct SpatioDirectionalTangentSpace {
     using DirectionalEmbedded = sdmm::Vector<Scalar, 3>;
     using DirectionalTangent = sdmm::Vector<Scalar, 2>;
     using Mask = enoki::mask_t<Embedded_>;
-    using Matrix = enoki::Matrix<Scalar, 3>;
 
     using ScalarExpr = enoki::expr_t<Scalar>;
     using EmbeddedExpr = enoki::expr_t<Embedded>;
     using TangentExpr = enoki::expr_t<Tangent>;
     using DirectionalEmbeddedExpr = enoki::expr_t<DirectionalEmbedded>;
     using DirectionalTangentExpr = enoki::expr_t<DirectionalTangent>;
-    using MatrixExpr = enoki::expr_t<Matrix>;
     using MaskExpr = enoki::expr_t<Mask>;
 
     using ScalarS = enoki::scalar_t<Scalar>;
@@ -120,7 +118,7 @@ struct SpatioDirectionalTangentSpace {
         const ScalarExpr sinc_angle = enoki::select(
             sin_angle < 1e-4,
             ScalarExpr(1),
-            sinc_angle / length
+            sin_angle / length
         );
 
         inv_jacobian = enoki::select(length < M_PI, sinc_angle, 0);

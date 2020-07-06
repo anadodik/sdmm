@@ -52,7 +52,6 @@ void sampling(benchmark::State &state) {
     RNG rng;
 
     Value pdf;
-    enoki::set_slices(pdf, enoki::slices(distribution));
     sdmm::replace_embedded_t<JointSDMM, Value> sample;
     sdmm::replace_tangent_t<JointSDMM, Value> tangent_sample;
     for(auto _ : state) {

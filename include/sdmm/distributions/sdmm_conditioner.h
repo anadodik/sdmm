@@ -69,7 +69,8 @@ inline auto prepare(
     enoki::vectorize_safe(
         VECTORIZE_WRAP_MEMBER(prepare_vectorized), std::forward<Conditioner>(conditioner), joint
     );
-    assert(conditioner.marginal.weight.prepare());
+    bool cdf_success = conditioner.marginal.weight.prepare();
+    assert(cdf_success);
 }
 
 template<typename Conditioner>
@@ -80,7 +81,8 @@ inline auto create_conditional(
     enoki::vectorize_safe(
         VECTORIZE_WRAP_MEMBER(create_conditional_vectorized), conditioner, point
     );
-    assert(conditioner.conditional.weight.prepare());
+    bool cdf_success = conditioner.conditional.weight.prepare();
+    assert(cdf_success);
 }
 
 template<typename Joint_, typename Marginal_, typename Conditional_>

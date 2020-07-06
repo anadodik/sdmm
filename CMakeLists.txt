@@ -65,10 +65,21 @@ add_executable(
     tests/distributions.cpp
     tests/matrix.cpp
     tests/spaces.cpp
+    tests/comparison.cpp
 )
+target_compile_definitions(tests PRIVATE COMPARISON=1)
 target_compile_features(tests PRIVATE cxx_std_17)
 target_include_directories(tests PRIVATE tests)
-target_link_libraries(tests PRIVATE sdmm Eigen3::Eigen doctest::doctest)
+target_link_libraries(
+    tests
+
+    PRIVATE
+    sdmm
+    Eigen3::Eigen
+    doctest::doctest
+    jmm
+    jmm_interface
+)
 
 find_package(benchmark REQUIRED)
 
