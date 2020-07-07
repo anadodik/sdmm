@@ -1,6 +1,8 @@
 [submodule "ext/enoki"]
 	path = ext/enoki
 	url = https://github.com/mitsuba-renderer/enoki
+    branch = master
 [submodule "ext/doctest"]
 	path = ext/doctest
 	url = https://github.com/onqtam/doctest.git
+    branch = master
