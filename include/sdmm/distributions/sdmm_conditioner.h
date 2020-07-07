@@ -120,7 +120,7 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::prepare_vectorized(
     }
     auto aa_sqrt_inv_ab = cov_aa_sqrt_inv * cov_ab;
     conditional.cov = cov_bb - linalg::transpose(aa_sqrt_inv_ab) * aa_sqrt_inv_ab;
-    mean_transform = cov_ba * enoki::transpose(cov_aa_sqrt_inv) * cov_aa_sqrt_inv;
+    mean_transform = cov_ba * linalg::transpose(cov_aa_sqrt_inv) * cov_aa_sqrt_inv;
 
     conditional.prepare_cov();
 }
