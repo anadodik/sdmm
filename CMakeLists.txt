@@ -27,36 +27,37 @@ else ()
     MESSAGE(ERROR "Compiler not supported!")
 endif()
 
-find_package(Eigen3 3.3 REQUIRED)
+# Adding conan dependencies.
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+conan_basic_setup()
 
-find_package(spdlog CONFIG REQUIRED)
-find_package(fmt REQUIRED)
-
+# Adding enoki dependency.
 add_subdirectory(ext/enoki)
 enoki_set_compile_flags()
 enoki_set_native_flags()
-add_subdirectory(ext/doctest)
 
-add_library(sdmm INTERFACE)
-target_include_directories(
-    sdmm INTERFACE include ext/enoki/include ${Boost_INCLUDE_DIRS}
+# Adding JMM dependency for comparisons.
+add_library(jmm ext/jmm/include/jmm/multivariate_tangent_normal.cpp)
+target_include_directories(jmm PRIVATE ext/jmm/include)
+target_link_libraries(jmm PUBLIC ${CONAN_LIBS})
+target_compile_options(jmm PRIVATE 
+    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-w>
+    $<$<CXX_COMPILER_ID:MSVC>:/W1>
 )
-target_link_libraries(sdmm INTERFACE fmt::fmt spdlog::spdlog)
+add_library(jmm_interface INTERFACE)
+target_include_directories(jmm_interface INTERFACE ext/jmm/include)
+target_compile_options(jmm_interface INTERFACE 
+    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-w>
+    $<$<CXX_COMPILER_ID:MSVC>:/W1>
+)
+
+# The main SDMM library.
+add_library(sdmm INTERFACE)
+target_include_directories(sdmm INTERFACE include ext/enoki/include)
+target_link_libraries(sdmm INTERFACE ${CONAN_LIBS})
 target_compile_features(sdmm INTERFACE cxx_std_17)
-target_compile_definitions(sdmm INTERFACE SPDLOG_FMT_EXTERNAL)
 
-add_executable(app src/main.cpp)
-target_link_libraries(app PRIVATE sdmm)
-
-# set(resources_source "${CMAKE_SOURCE_DIR}/resources")
-# set(resources_destination "${CMAKE_CURRENT_BINARY_DIR}/resources")
-# add_custom_command(
-#     TARGET sdmm
-#     COMMAND ${CMAKE_COMMAND} -E create_symlink ${resources_source} ${resources_destination}
-#     MAIN_DEPENDENCY ${resources_source}/shaders/background.frag
-#     COMMENT "Copying resources folder from \"${resources_source}\" => \"${resources_destination}\"."
-# )
-
+# Test executable.
 add_executable(
     tests
 
@@ -70,42 +71,9 @@ add_executable(
 target_compile_definitions(tests PRIVATE COMPARISON=1)
 target_compile_features(tests PRIVATE cxx_std_17)
 target_include_directories(tests PRIVATE tests)
-target_link_libraries(
-    tests
+target_link_libraries(tests PRIVATE sdmm jmm jmm_interface ${CONAN_LIBS})
 
-    PRIVATE
-    sdmm
-    Eigen3::Eigen
-    doctest::doctest
-    jmm
-    jmm_interface
-)
-
-find_package(benchmark REQUIRED)
-
-add_library(jmm ext/jmm/multivariate_tangent_normal.cpp)
-target_include_directories(jmm PRIVATE ext)
-target_link_libraries(jmm PUBLIC Eigen3::Eigen)
-target_compile_options(jmm PRIVATE 
-    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-w>
-    $<$<CXX_COMPILER_ID:MSVC>:/W1>
-)
-
-add_library(jmm_interface INTERFACE)
-target_include_directories(jmm_interface INTERFACE ext)
-target_compile_options(jmm_interface INTERFACE 
-    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-w>
-    $<$<CXX_COMPILER_ID:MSVC>:/W1>
-)
-
-find_package(Boost 1.66 REQUIRED COMPONENTS
-    system
-    filesystem
-    thread
-    iostreams
-    serialization
-)
-
+# Benchmarks executable.
 add_executable(
     benchmarks
 
@@ -116,19 +84,7 @@ add_executable(
 target_compile_definitions(benchmarks PRIVATE COMPARISON=0)
 target_compile_features(benchmarks PRIVATE cxx_std_17)
 target_include_directories(benchmarks PRIVATE benchmark::benchmark)
-target_link_libraries(
-    benchmarks
-
-    PRIVATE
-    sdmm
-    benchmark::benchmark
-    Eigen3::Eigen
-    Boost::system Boost::filesystem
-    Boost::thread
-    Boost::serialization
-    jmm
-    jmm_interface
-)
+target_link_libraries(benchmarks PRIVATE sdmm ${CONAN_LIBS} jmm jmm_interface)
 
 # find_package(OpenMP)
 # 
