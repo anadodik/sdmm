@@ -17,9 +17,7 @@
 using Scalar = float;
 
 template<typename JMM, typename SDMM, size_t... Indices>
-void copy_means(
-    JMM& jmm, SDMM& sdmm, std::index_sequence<Indices...> 
-) {
+void copy_means(JMM& jmm, SDMM& sdmm, std::index_sequence<Indices...>) {
     size_t NComponents = jmm.nComponents();
     for(size_t component_i = 0; component_i < NComponents; ++component_i) {
         enoki::slice(sdmm.tangent_space, component_i).set_mean(
@@ -31,9 +29,7 @@ void copy_means(
 }
 
 template<typename JMM, typename SDMM, size_t... Indices>
-void copy_covs(
-    JMM& jmm, SDMM& sdmm, std::index_sequence<Indices...> 
-) {
+void copy_covs(JMM& jmm, SDMM& sdmm, std::index_sequence<Indices...>) {
     size_t NComponents = jmm.nComponents();
     for(size_t component_i = 0; component_i < NComponents; ++component_i) {
         enoki::slice(sdmm.cov, component_i) = sdmm::matrix_s_t<SDMM>(
