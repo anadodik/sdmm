@@ -180,6 +180,9 @@ auto SDMM<Matrix_, TangentSpace_>::sample(
         }
     );
 
+    if(enoki::slices(tangent) != enoki::slices(gaussian_idx)) {
+        enoki::set_slices(tangent, enoki::slices(gaussian_idx)); 
+    }
     for(size_t dim_i = 0; dim_i < CovSize; dim_i += 2) {
         auto [u1, u2] = box_mueller_transform(
             rng.next_float32(), rng.next_float32()
