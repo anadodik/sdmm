@@ -180,9 +180,9 @@ auto SDMM<Matrix_, TangentSpace_>::sample(
         }
     );
 
-    if(enoki::slices(tangent) != enoki::slices(gaussian_idx)) {
-        enoki::set_slices(tangent, enoki::slices(gaussian_idx)); 
-    }
+    // if(enoki::slices(tangent) != enoki::slices(gaussian_idx)) {
+    //     enoki::set_slices(tangent, enoki::slices(gaussian_idx)); 
+    // }
     for(size_t dim_i = 0; dim_i < CovSize; dim_i += 2) {
         auto [u1, u2] = box_mueller_transform(
             rng.next_float32(), rng.next_float32()
@@ -193,28 +193,29 @@ auto SDMM<Matrix_, TangentSpace_>::sample(
         }
     }
 
-    Matrix sampled_cov_sqrt;
-    enoki::set_slices(sampled_cov_sqrt, enoki::slices(gaussian_idx));
-    for(size_t mat_i = 0; mat_i < enoki::slices(gaussian_idx); ++mat_i) {
-        uint32_t index = gaussian_idx.coeff(mat_i);
-        enoki::slice(sampled_cov_sqrt, mat_i) = enoki::slice(cov_sqrt, index);
-    }
+    auto sampled_cov_sqrt = enoki::slice(cov_sqrt, gaussian_idx);
+    // enoki::set_slices(sampled_cov_sqrt, enoki::slices(gaussian_idx));
+    // for(size_t mat_i = 0; mat_i < enoki::slices(gaussian_idx); ++mat_i) {
+    //     uint32_t index = gaussian_idx.coeff(mat_i);
+    //     enoki::slice(sampled_cov_sqrt, mat_i) = enoki::slice(cov_sqrt, index);
+    // }
     // TODO: ^gather
     // auto covs = enoki::gather<Matrix, sizeof(MatrixS)>(cov_sqrt.data(), weight_indices);
     tangent = sampled_cov_sqrt * tangent;
-    if(enoki::slices(sample) != enoki::slices(gaussian_idx)) {
-        enoki::set_slices(sample, enoki::slices(gaussian_idx)); 
-    }
-    if(enoki::slices(inv_jacobian) != enoki::slices(gaussian_idx)) {
-        enoki::set_slices(inv_jacobian, enoki::slices(gaussian_idx)); 
-    }
-    for(size_t ts_i = 0; ts_i < enoki::slices(gaussian_idx); ++ts_i) {
-        uint32_t index = gaussian_idx.coeff(ts_i);
-        enoki::slice(sample, ts_i) =
-            enoki::slice(tangent_space, index).from(
-                enoki::slice(tangent, ts_i), enoki::slice(inv_jacobian, ts_i)
-            );
-    }
+    // if(enoki::slices(sample) != enoki::slices(gaussian_idx)) {
+    //     enoki::set_slices(sample, enoki::slices(gaussian_idx)); 
+    // }
+    // if(enoki::slices(inv_jacobian) != enoki::slices(gaussian_idx)) {
+    //     enoki::set_slices(inv_jacobian, enoki::slices(gaussian_idx)); 
+    // }
+    sample = enoki::slice(tangent_space, gaussian_idx).from(tangent, inv_jacobian.coeff(0));
+    // for(size_t ts_i = 0; ts_i < enoki::slices(gaussian_idx); ++ts_i) {
+    //     uint32_t index = gaussian_idx.coeff(ts_i);
+    //     enoki::slice(sample, ts_i) =
+    //         enoki::slice(tangent_space, index).from(
+    //             enoki::slice(tangent, ts_i), enoki::slice(inv_jacobian, ts_i)
+    //         );
+    // }
 }
 
 template<typename Matrix_, typename TangentSpace_>
