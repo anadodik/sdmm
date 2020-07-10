@@ -69,10 +69,6 @@ template<typename Value_>
     //     VECTORIZE_WRAP_MEMBER(is_valid),
     //     *this
     // );
-    BoolOuter valid = is_valid(*this);
-    if(enoki::none(valid)) {
-        return valid;
-    }
 
     size_t n_slices = enoki::slices(pmf);
     if(enoki::slices(cdf) != n_slices) {
@@ -83,8 +79,12 @@ template<typename Value_>
         enoki::slice(cdf, i) = enoki::slice(cdf, i - 1) + enoki::slice(pmf, i);
     }
 
-    ValueOuter cdf_sum = enoki::slice(cdf, n_slices - 1);
-    ValueOuter inv_normalizer = 1 / enoki::select(cdf_sum > 0.f, cdf_sum, 1.f);
+    ValueOuter pmf_sum = enoki::slice(cdf, n_slices - 1);
+    bool is_valid = pmf_sum != 0;
+    if(!is_valid) {
+        return is_valid;
+    }
+    ValueOuter inv_normalizer = 1 / enoki::select(pmf_sum > 0.f, pmf_sum, 1.f);
 
     // This can be further optimized by
     // only iterating over cdfs which have non-zero sums.
@@ -93,7 +93,7 @@ template<typename Value_>
         VECTORIZE_WRAP_MEMBER(normalize), *this, inv_normalizer
     );
 
-    return valid;
+    return is_valid;
 }
 
 }

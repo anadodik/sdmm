@@ -49,7 +49,11 @@ struct SDMMConditioner {
     using MarginalEmbedded = typename Marginal::Embedded;
 
     auto prepare_vectorized(const Joint& joint) -> void;
+
     auto create_conditional_vectorized(const MarginalEmbeddedS& point) -> void;
+    auto create_conditional_vectorized(
+        const MarginalEmbeddedS& point, Conditional& out
+    ) -> void;
 
     Marginal marginal;
     Conditional conditional;
@@ -77,12 +81,31 @@ template<typename Conditioner>
 inline auto create_conditional(
     // cannot declare point as const because enoki complains
     Conditioner& conditioner, typename Conditioner::MarginalEmbeddedS& point
-) -> void {
+) -> bool {
     enoki::vectorize_safe(
         VECTORIZE_WRAP_MEMBER(create_conditional_vectorized), conditioner, point
     );
     bool cdf_success = conditioner.conditional.weight.prepare();
-    assert(cdf_success);
+    // assert(cdf_success);
+    return cdf_success;
+}
+
+template<typename Conditioner>
+inline auto create_conditional(
+    // cannot declare point as const because enoki complains
+    Conditioner& conditioner,
+    typename Conditioner::MarginalEmbeddedS& point,
+    typename Conditioner::Conditional& out
+) -> bool {
+    enoki::vectorize_safe(
+        VECTORIZE_WRAP_MEMBER(create_conditional_vectorized),
+        conditioner,
+        point,
+        out
+    );
+    bool cdf_success = out.weight.prepare();
+    // assert(cdf_success);
+    return cdf_success;
 }
 
 template<typename Joint_, typename Marginal_, typename Conditional_>
@@ -137,6 +160,22 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_vector
         )
     );
     marginal.posterior(point, conditional.weight.pmf, marginal_tangents);
+}
+
+template<typename Joint_, typename Marginal_, typename Conditional_>
+auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_vectorized(
+    const MarginalEmbeddedS& point, Conditional& out
+) -> void {
+    ScalarExpr inv_jacobian_to, inv_jacobian_from;
+    out.tangent_space.set_mean(
+        tangent_space.from(
+            mean_transform * marginal.tangent_space.to(point, inv_jacobian_to),
+            inv_jacobian_from
+        )
+    );
+    marginal.posterior(point, out.weight.pmf);
+    out.cov_sqrt = conditional.cov_sqrt;
+    out.inv_cov_sqrt_det = conditional.inv_cov_sqrt_det;
 }
 
 }

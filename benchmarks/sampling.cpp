@@ -55,7 +55,8 @@ void sampling(benchmark::State &state) {
     sdmm::replace_embedded_t<JointSDMM, Value> sample;
     sdmm::replace_tangent_t<JointSDMM, Value> tangent_sample;
     for(auto _ : state) {
-        distribution.sample(rng, sample, pdf, tangent_sample);
+        // FIXME
+        // distribution.sample(rng, sample, pdf, tangent_sample);
         spdlog::info("tangent_sample: {}", tangent_sample);
     }
 

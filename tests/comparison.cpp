@@ -108,7 +108,7 @@ TEST_CASE("sampling/pdf comparison") {
         JointSDMM, MarginalSDMM, ConditionalSDMM
     >;
 
-    using RNG = enoki::PCG32<Value, NSamples>;
+    using RNG = enoki::PCG32<float, 1>;
 
     RNG rng;
     RNG jmm_rng;
@@ -134,9 +134,9 @@ TEST_CASE("sampling/pdf comparison") {
 
     for(int ctr = 0; ctr < 5; ++ctr) {
         auto jmm_distribution = MM();
-        auto conditional = MMCond();
+        auto jmm_conditional = MMCond();
         jmm_distribution.setNComponents(t_components);
-        conditional.setNComponents(t_components);
+        jmm_conditional.setNComponents(t_components);
         for(int i = 0; i < t_components; ++i) {
             MM::Vectord mean;
             mean << 
@@ -158,12 +158,12 @@ TEST_CASE("sampling/pdf comparison") {
         typename MM::ConditionVectord jmm_point({1, 1, 1});
         Scalar heuristicWeight;
         
-        jmm_distribution.conditional(jmm_point, conditional, heuristicWeight);
-        auto jmm_sample = conditional.sample(
-            [&jmm_rng]() mutable -> Scalar { return jmm_rng.next_float32().coeff(0); }
+        jmm_distribution.conditional(jmm_point, jmm_conditional, heuristicWeight);
+        auto jmm_sample = jmm_conditional.sample(
+            [&jmm_rng]() mutable -> Scalar { return jmm_rng.next_float32(); }
         );
 
-        Scalar jmm_pdf = conditional.pdf(jmm_sample);
+        Scalar jmm_pdf = jmm_conditional.pdf(jmm_sample);
         spdlog::info("jmm_sample={}", jmm_sample.transpose());
         spdlog::info("jmm_pdf={}", jmm_pdf);
 
@@ -176,22 +176,25 @@ TEST_CASE("sampling/pdf comparison") {
         enoki::set_slices(conditioner, enoki::slices(distribution));
         sdmm::prepare(conditioner, distribution);
 
+        ConditionalSDMM conditional;
+        enoki::set_slices(conditional, enoki::slices(distribution));
+
         sdmm::embedded_s_t<MarginalSDMM> point({1, 1, 1});
-        sdmm::create_conditional(conditioner, point);
+        sdmm::create_conditional(conditioner, point, conditional);
 
         Value inv_jacobian;
-        enoki::set_slices(inv_jacobian, enoki::slices(distribution));
-        sdmm::replace_embedded_t<ConditionalSDMM, Value> sample;
-        sdmm::replace_tangent_t<ConditionalSDMM, Value> tangent_sample;
+        enoki::set_slices(inv_jacobian, 1);
+        sdmm::replace_embedded_t<ConditionalSDMM, float> sample;
+        sdmm::replace_tangent_t<ConditionalSDMM, float> tangent_sample;
         
-        conditioner.conditional.sample(rng, sample, inv_jacobian, tangent_sample);
+        conditional.sample(rng, sample, inv_jacobian, tangent_sample);
         spdlog::info("sample={}, norm={}", sample, enoki::norm(sample));
 
         Value posterior;
         enoki::set_slices(posterior, enoki::slices(distribution));
         enoki::vectorize_safe(
             VECTORIZE_WRAP_MEMBER(posterior),
-            conditioner.conditional,
+            conditional,
             sample,
             posterior
         );
