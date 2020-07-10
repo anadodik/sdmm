@@ -11,3 +11,4 @@ benchmark/1.5.0@_/_
 
 [generators]
 cmake
+scons
