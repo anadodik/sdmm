@@ -151,7 +151,11 @@ template<typename Matrix_, typename TangentSpace_>
 auto SDMM<Matrix_, TangentSpace_>::prepare_cov() -> void {
     sdmm::linalg::cholesky(cov, cov_sqrt, cov_is_psd);
     inv_cov_sqrt_det = 1.f / enoki::hprod(enoki::diag(cov_sqrt));
-    assert(enoki::all(cov_is_psd));
+    bool all_psd = enoki::all(cov_is_psd);
+    if(!all_psd) {
+        std::cerr << fmt::format("all_psd={}\n", cov_is_psd);
+        assert(all_psd);
+    }
 }
 
 template<typename Value>
@@ -201,7 +205,7 @@ auto SDMM<Matrix_, TangentSpace_>::sample(
     // }
     // TODO: ^gather
     // auto covs = enoki::gather<Matrix, sizeof(MatrixS)>(cov_sqrt.data(), weight_indices);
-    tangent = sampled_cov_sqrt * tangent;
+    tangent = TangentIn(sampled_cov_sqrt * tangent);
     // if(enoki::slices(sample) != enoki::slices(gaussian_idx)) {
     //     enoki::set_slices(sample, enoki::slices(gaussian_idx)); 
     // }

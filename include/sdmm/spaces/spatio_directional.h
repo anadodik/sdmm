@@ -84,8 +84,8 @@ struct SpatioDirectionalTangentSpace {
 
     template<typename EmbeddedIn>
     auto to(const EmbeddedIn& embedded, ScalarExpr& inv_jacobian) const -> TangentExpr {
-        DirectionalEmbeddedExpr directional_local =
-            coordinate_system.from * directional(embedded);
+        const DirectionalEmbeddedExpr directional_local =
+            coordinate_system.to * directional(embedded);
         const ScalarExpr cos_angle = directional_local.z();
         assert(enoki::all(cos_angle >= -1));
 

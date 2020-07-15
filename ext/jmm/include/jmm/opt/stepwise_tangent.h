@@ -203,7 +203,7 @@ protected:
     Scalar epsilon;
     bool decreasePrior;
     Scalar trainingBatch = 0;
-    bool jacobianCorrection = true;
+    bool jacobianCorrection = false;
     int trainingCutoff = 32;
     
     Scalar minBPrior = 0; // 1e-8f;
@@ -255,6 +255,8 @@ public:
         jacobianCorrection = on;
     }
 
+    jmm::aligned_vector<Scalar>& getStatsGlobal() { return statsGlobalNormalized.weights; }
+
     jmm::aligned_vector<Matrixd>& getBPriors() {
         return bPriors;
     }
@@ -304,13 +306,17 @@ public:
             stats.heuristicWeight += samples.weights(sample_i) * heuristicPosterior;
             const auto& components = distribution.components();
             
+            // std::cerr << "sample_" << sample_i << ", weight=" << samples.weights(sample_i) << "\n";
+            // std::cerr << "sample_" << sample_i << ", point=" << samples.samples.col(sample_i).transpose() << "\n";
+            std::cerr << "sample_" << sample_i << ", posteriors=[";
             for(int component_i = 0; component_i < distribution.nComponents(); ++component_i) {
-                if(posterior(component_i) < 1e-10) {
-                    // TODO: still calculate marginals and normalization
-                    continue;
-                }
+                // if(posterior(component_i) < 1e-10) {
+                //     // TODO: still calculate marginals and normalization
+                //     continue;
+                // }
 				// Scalar weightAugmented = std::sqrt(samples.weights(sample_i));
                 Scalar weight = samples.weights(sample_i) * posterior(component_i);
+                std::cerr << posterior(component_i) << ", ";
                 #if TANGENT_DEBUG == 1
                 if(weight == 0.f) {
                     std::cerr << "Zero weight * posterior: "
@@ -345,6 +351,7 @@ public:
                 }
                 #endif // SPLIT_AND_MERGE == 1
             }
+            std::cerr << "]\n";
         }
     }
 
@@ -624,9 +631,9 @@ public:
             jmm::aligned_vector<Scalar> samplesPerComponent(t_components);
 
             int iterations = 1;
-            if(iterationsRun < 3) {
-                iterations = 2;
-            }
+            // if(iterationsRun < 3) {
+            //     iterations = 2;
+            // }
 
             for(int emIt = 0; emIt < iterations; ++emIt) {
                 #pragma omp barrier

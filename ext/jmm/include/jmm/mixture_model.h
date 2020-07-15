@@ -129,7 +129,7 @@ public:
     void setNComponents(int lastIdx) {m_lastIdx = lastIdx;}
 
     Scalar heuristicWeight() const { return m_heuristicWeight; }
-    void setHeuristicWeight(Scalar weight) { m_heuristicWeight = weight; }
+    // void setHeuristicWeight(Scalar weight) { m_heuristicWeight = weight; }
 
     Scalar normalization() const { return m_normalization; }
     void setNormalization(Scalar normalization) { m_normalization = normalization; }

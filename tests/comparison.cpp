@@ -7,12 +7,12 @@
 #include "sdmm/distributions/categorical.h"
 #include "sdmm/distributions/sdmm.h"
 #include "sdmm/distributions/sdmm_conditioner.h"
+#include "sdmm/opt/em.h"
 
 #include "utils.h"
 
-#if COMPARISON == 1
 #include "jmm/mixture_model.h"
-#endif
+#include "jmm/opt/stepwise_tangent.h"
 
 using Scalar = float;
 
@@ -51,6 +51,34 @@ void copy_sdmm(JMM& jmm, SDMM& sdmm) {
     CHECK_EQ(prepare_success, true);
 }
 
+template<typename JMMData, typename SDMMData, typename RNG>
+void create_data(JMMData& jmm_data, SDMMData& sdmm_data, RNG& rng, size_t n_points) {
+    for(size_t point_i = 0; point_i < n_points; ++point_i) {
+        typename JMMData::Vectord point;
+        point << 
+            rng.next_float32(), rng.next_float32(), rng.next_float32(),
+            rng.next_float32(), rng.next_float32(), rng.next_float32();
+        point.bottomRows(3) /= point.bottomRows(3).norm();
+        Scalar weight = rng.next_float32();
+        bool isDiffuse = false; // rng.next_float32() > 0.5;
+        Scalar heuristic_pdf = 0; // isDiffuse ? rng.next_float32() : 0;
+
+        jmm_data.samples.col(point_i) << point;
+        jmm_data.weights(point_i) = weight;
+        jmm_data.isDiffuse(point_i) = isDiffuse;
+        jmm_data.heuristicPdfs(point_i) = heuristic_pdf;
+
+        sdmm_data.push_back(
+            sdmm::embedded_s_t<SDMMData>{
+                point(0), point(1), point(2), point(3), point(4), point(5)
+            },
+            sdmm::normal_s_t<SDMMData>{0, 0, 1},
+            weight,
+            heuristic_pdf
+        );
+    }
+}
+
 template<typename Value, typename JointSDMM, size_t NComponents>
 void init_sdmm(JointSDMM& distribution) {
     enoki::set_slices(distribution, NComponents);
@@ -78,8 +106,8 @@ TEST_CASE("sampling/pdf comparison") {
     constexpr static size_t JointSize = 5;
     constexpr static size_t MarginalSize = 3;
     constexpr static size_t ConditionalSize = 2;
-    constexpr static size_t NComponents = 64;
-    constexpr static int NSamples = 1;
+    constexpr static size_t NComponents = 16;
+    constexpr static int NPoints = 1;
     static_assert(JointSize == MarginalSize + ConditionalSize);
 
     using Packet = enoki::Packet<Scalar, PacketSize>;
@@ -108,18 +136,20 @@ TEST_CASE("sampling/pdf comparison") {
         JointSDMM, MarginalSDMM, ConditionalSDMM
     >;
 
-    using RNG = enoki::PCG32<float, 1>;
+    using EM = sdmm::EM<JointSDMM>;
+    using Data = sdmm::Data<JointSDMM>;
+    using JointCov = sdmm::matrix_t<JointSDMM>;
 
+    using RNG = enoki::PCG32<float>;
     RNG rng;
     RNG jmm_rng;
-    enoki::PCG32<float> init_rng;
+    RNG init_rng;
 
-    #if COMPARISON == 1
     constexpr static int t_dims = 6;
     constexpr static int t_conditionalDims = 3;
     constexpr static int t_conditionDims = t_dims - t_conditionalDims;
-    constexpr static int t_initComponents = 64;
-    constexpr static int t_components = 64;
+    constexpr static int t_initComponents = 16;
+    constexpr static int t_components = 16;
     constexpr static bool USE_BAYESIAN = true;
 
     using MM = jmm::MixtureModel<
@@ -131,13 +161,33 @@ TEST_CASE("sampling/pdf comparison") {
         jmm::MultivariateNormal
     >;
     using MMCond = typename MM::ConditionalDistribution;
+    using StepwiseTangentEM = jmm::StepwiseTangentEM<
+        t_dims,
+        t_components,
+        t_conditionalDims,
+        Scalar,
+        jmm::MultivariateTangentNormal,
+        jmm::MultivariateNormal
+    >;
+    using Samples = jmm::Samples<t_dims, Scalar>;
 
-    for(int ctr = 0; ctr < 5; ++ctr) {
+    for(int ctr = 0; ctr < 1; ++ctr) {
         auto jmm_distribution = MM();
         auto jmm_conditional = MMCond();
         jmm_distribution.setNComponents(t_components);
         jmm_conditional.setNComponents(t_components);
+        StepwiseTangentEM optimizer(
+            0.5,
+            Eigen::Matrix<Scalar, 5, 1>::Identity() * 1e-5,
+            1.f / NComponents
+        );
         for(int i = 0; i < t_components; ++i) {
+            MM::Matrixd cov_prior; cov_prior <<
+                1e-4, 0, 0, 0, 0,
+                0, 1e-4, 0, 0, 0,
+                0, 0, 1e-4, 0, 0,
+                0, 0, 0, 1e-5, 0,
+                0, 0, 0, 0, 1e-5;
             MM::Vectord mean;
             mean << 
                 init_rng.next_float32(),
@@ -152,10 +202,64 @@ TEST_CASE("sampling/pdf comparison") {
                 mean,
                 MM::Matrixd::Identity()
             );
+            optimizer.getBPriors()[i] = cov_prior;
         }
         jmm_distribution.configure();
 
-        typename MM::ConditionVectord jmm_point({1, 1, 1});
+        Samples samples;
+        samples.reserve(NPoints);
+        samples.setSize(NPoints);
+
+        JointSDMM distribution;
+        copy_sdmm(jmm_distribution, distribution);
+
+        EM em;
+        em = enoki::zero<EM>(NComponents);
+        Scalar weight_prior = 1.f / NComponents;
+        Scalar cov_prior_strength = 5.f / NComponents;
+        JointCov cov_prior = sdmm::full_inner<JointCov, Value, NComponents>(
+            2e-3, 0, 0, 0, 0,
+            0, 2e-3, 0, 0, 0,
+            0, 0, 2e-3, 0, 0,
+            0, 0, 0, 2e-4, 0,
+            0, 0, 0, 0, 2e-4
+        );
+        em.set_priors(weight_prior, cov_prior_strength, cov_prior);
+
+        Data data;
+        data.reserve(NPoints + 200);
+
+        create_data(samples, data, init_rng, NPoints);
+        Scalar max_error;
+        optimizer.optimize(jmm_distribution, samples, max_error);
+        std::cerr << "jmm_stats=";
+        for(auto& weight : optimizer.getStatsGlobal()) {
+            std::cerr << weight << ", ";
+        }
+        std::cerr << "\n";
+        for(auto& weight : jmm_distribution.weights()) {
+            std::cerr << weight << ", ";
+        }
+        std::cerr << "\n";
+
+        // TODO: add all to one function
+        // TODO: emIt
+        em.compute_stats_model_parallel(distribution, data);
+        em.interpolate_stats();
+        std::cerr << "Data size=" << data.size << "\n";
+        bool successful_stats_norm = em.normalize_stats(data);
+        spdlog::info("stats={}", em.stats_normalized.weight);
+        enoki::vectorize_safe(
+            VECTORIZE_WRAP_MEMBER(update_model), em, distribution
+        );
+        bool successful_prep = sdmm::prepare(distribution);
+        spdlog::info("Success: {} and {}", successful_stats_norm, successful_prep);
+
+        typename MM::ConditionVectord jmm_point({
+            jmm_rng.next_float32(),
+            jmm_rng.next_float32(),
+            jmm_rng.next_float32()
+        });
         Scalar heuristicWeight;
         
         jmm_distribution.conditional(jmm_point, jmm_conditional, heuristicWeight);
@@ -167,10 +271,12 @@ TEST_CASE("sampling/pdf comparison") {
         spdlog::info("jmm_sample={}", jmm_sample.transpose());
         spdlog::info("jmm_pdf={}", jmm_pdf);
 
-        #endif // COMPARISON == 1
-
-        JointSDMM distribution;
-        copy_sdmm(jmm_distribution, distribution);
+        auto jmm_dist_sample = jmm_distribution.sample(
+            [&jmm_rng]() mutable -> Scalar { return jmm_rng.next_float32(); }
+        );
+        Scalar jmm_dist_pdf = jmm_distribution.pdf(jmm_dist_sample);
+        spdlog::info("jmm_dist_sample={}", jmm_dist_sample.transpose());
+        spdlog::info("jmm_dist_pdf={}", jmm_dist_pdf);
 
         Conditioner conditioner;
         enoki::set_slices(conditioner, enoki::slices(distribution));
@@ -179,17 +285,19 @@ TEST_CASE("sampling/pdf comparison") {
         ConditionalSDMM conditional;
         enoki::set_slices(conditional, enoki::slices(distribution));
 
-        sdmm::embedded_s_t<MarginalSDMM> point({1, 1, 1});
+        sdmm::embedded_s_t<MarginalSDMM> point({
+            rng.next_float32(),
+            rng.next_float32(),
+            rng.next_float32()
+        });
         sdmm::create_conditional(conditioner, point, conditional);
 
         Value inv_jacobian;
         enoki::set_slices(inv_jacobian, 1);
-        sdmm::replace_embedded_t<ConditionalSDMM, float> sample;
-        sdmm::replace_tangent_t<ConditionalSDMM, float> tangent_sample;
+        sdmm::replace_embedded_t<ConditionalSDMM, Scalar> sample;
+        sdmm::replace_tangent_t<ConditionalSDMM, Scalar> tangent_sample;
         
         conditional.sample(rng, sample, inv_jacobian, tangent_sample);
-        spdlog::info("sample={}, norm={}", sample, enoki::norm(sample));
-
         Value posterior;
         enoki::set_slices(posterior, enoki::slices(distribution));
         enoki::vectorize_safe(
@@ -198,7 +306,21 @@ TEST_CASE("sampling/pdf comparison") {
             sample,
             posterior
         );
-        float pdf = enoki::hsum_nested(posterior);
+        Scalar pdf = enoki::hsum_nested(posterior);
+        spdlog::info("sample={}, norm={}", sample, enoki::norm(sample));
         spdlog::info("pdf={}", pdf);
+
+        sdmm::replace_embedded_t<JointSDMM, Scalar> dist_sample;
+        sdmm::replace_tangent_t<JointSDMM, Scalar> dist_tangent_sample;
+        distribution.sample(rng, dist_sample, inv_jacobian, dist_tangent_sample);
+        enoki::vectorize_safe(
+            VECTORIZE_WRAP_MEMBER(posterior),
+            distribution,
+            dist_sample,
+            posterior
+        );
+        pdf = enoki::hsum_nested(posterior);
+        spdlog::info("dist_sample={}", dist_sample);
+        spdlog::info("dist_pdf={}", pdf);
     }
 }

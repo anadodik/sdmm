@@ -35,13 +35,13 @@ struct DirectionalTangentSpace {
 
     template<typename EmbeddedIn>
     auto to(const EmbeddedIn& embedded, ScalarExpr& inv_jacobian) const -> TangentExpr {
-        EmbeddedExpr embedded_local = coordinate_system.to * embedded;
-        ScalarExpr cos_angle = embedded_local.z();
+        const EmbeddedExpr embedded_local = coordinate_system.to * embedded;
+        const ScalarExpr cos_angle = embedded_local.z();
         // assert(enoki::all(cos_angle >= -1));
 
-        ScalarExpr angle = enoki::safe_acos(cos_angle);
-        ScalarExpr sin_angle = enoki::safe_sqrt(1 - cos_angle * cos_angle);
-        ScalarExpr rcp_sinc_angle = enoki::select(
+        const ScalarExpr angle = enoki::safe_acos(cos_angle);
+        const ScalarExpr sin_angle = enoki::safe_sqrt(1 - cos_angle * cos_angle);
+        const ScalarExpr rcp_sinc_angle = enoki::select(
             sin_angle < 1e-4,
             ScalarExpr(1),
             angle / sin_angle
@@ -62,18 +62,18 @@ struct DirectionalTangentSpace {
         // }
         ScalarExpr length = enoki::norm(tangent);
         auto [sin_angle, cos_angle] = enoki::sincos(length);
-        ScalarExpr sinc_angle = enoki::select(
+        const ScalarExpr sinc_angle = enoki::select(
             sin_angle < 1e-4,
             ScalarExpr(1),
             sin_angle / length
         );
+        inv_jacobian = enoki::select(length < M_PI, sinc_angle, 0);
 
-        EmbeddedExpr embedded_local{
+        const EmbeddedExpr embedded_local{
             tangent.x() * sinc_angle,
             tangent.y() * sinc_angle,
             cos_angle
         };
-        inv_jacobian = enoki::select(length < M_PI, sinc_angle, 0);
 
         return coordinate_system.from * embedded_local;
     }

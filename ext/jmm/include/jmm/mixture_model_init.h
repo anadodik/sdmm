@@ -223,10 +223,11 @@ namespace jmm {
             cov.bottomRightCorner(2, 2) = directionalCov;
 
             Matrixd bPrior = Matrixd::Identity();
-            bPrior.topLeftCorner(3, 3) <<
-                s * s.transpose() * 1e-4 +
-                t * t.transpose() * 1e-4 +
-                n * n.transpose() * 1e-4;
+            // bPrior.topLeftCorner(3, 3) <<
+            //     s * s.transpose() * 1e-4 +
+            //     t * t.transpose() * 1e-4 +
+            //     n * n.transpose() * 1e-4;
+            bPrior.topLeftCorner(3, 3).diagonal().setConstant(1e-4);
             bPrior.bottomRightCorner(2, 2).diagonal().setConstant(1e-5); // directionalCov * 0.5;
 
             Vectord mean;

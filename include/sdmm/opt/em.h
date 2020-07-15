@@ -106,7 +106,7 @@ struct EM {
     Tangent tangent;
 
     int iterations_run = 0;
-    ScalarS learning_rate = 0;
+    ScalarS learning_rate = 0.2;
     ScalarS alpha = 0.5;
 
     ScalarS weight_prior;
@@ -142,18 +142,43 @@ auto EM<SDMM_>::compute_stats_model_parallel(
     //     [](auto&& stats) { stats = enoki::zero<enoki::expr_t<decltype(stats)>>(); },
     //     batch_stats
     // );
-    for(size_t slice_i = 0; slice_i < enoki::slices(data); ++slice_i) {
+    for(size_t slice_i = 0; slice_i < data.size; ++slice_i) {
         auto data_slice = enoki::slice(data, slice_i);
         if(std::isnan(data_slice.weight) || data_slice.weight == 0) {
             continue;
         }
+        // spdlog::info("slice_{} weight={}", slice_i, data_slice.weight);
+        // spdlog::info("slice_{} point={}", slice_i, data_slice.point);
         enoki::vectorize_safe(
-            VECTORIZE_WRAP_MEMBER(posterior),
+            VECTORIZE_WRAP_MEMBER(pdf_gaussian),
             distribution,
             data_slice.point,
             posteriors,
             tangent
         );
+        // spdlog::info("tangent={}", tangent);
+        // spdlog::info("slice_{} pdf={}", slice_i, posteriors);
+        enoki::vectorize(
+            [](auto&& value, auto&& weight) { value *= weight; },
+            posteriors,
+            distribution.weight.pmf
+        );
+        // spdlog::info("slice_{} pmf={}", slice_i, distribution.weight.pmf);
+        // spdlog::info("slice_{} posterior={}", slice_i, posteriors);
+        auto posterior_sum = enoki::hsum(posteriors); 
+        if(data_slice.heuristic_pdf > 0) {
+            posterior_sum = 0.5 * posterior_sum + 0.5 * data_slice.heuristic_pdf;
+        }
+        if(posterior_sum == 0) {
+            continue;
+        }
+        auto rcp_posterior = 1 / posterior_sum;
+        enoki::vectorize(
+            [rcp_posterior](auto&& value) { value *= rcp_posterior; },
+            posteriors
+        );
+        spdlog::info("slice_{} posteriors={}", slice_i, posteriors);
+        // spdlog::info("slice_{} posterior_sum={}", slice_i, enoki::hsum(posteriors));
         enoki::vectorize_safe(
             VECTORIZE_WRAP_MEMBER(plus_eq),
             batch_stats,
