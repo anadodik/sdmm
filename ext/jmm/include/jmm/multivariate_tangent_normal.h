@@ -159,7 +159,7 @@ public:
         }
         cosAngle = std::min(Scalar(1), cosAngle);
 
-        Scalar angle = approx_acos(cosAngle);
+        Scalar angle = std::acos(cosAngle);
 		Scalar sinAngle = tsqrtf(1 - cosAngle * cosAngle);
         Scalar angleOverSin = (sinAngle < 1e-3) ? 1 : (angle / sinAngle); // boost::math::sinc_pi(angle);
         // Scalar angleOverSin = 1.f / boost::math::sinc_pi(angle);
@@ -375,6 +375,7 @@ public:
         if(!m_tangentSpace.log(sample - m_zeroedOutMean, tangent, jacobian)) {
             return 0;
         }
+        // std::cerr << "jmm_tangent=" << tangent.transpose() << "\n";
         JointTangentVectord standardized = toStandardNormal(tangent);
         Scalar pdf = NORMALIZATION * std::exp(-0.5 * standardized.squaredNorm());
 		// Scalar pdf = fakegaussian_pdf(0.833 * standardized.norm());
@@ -627,6 +628,9 @@ public:
         mean.template bottomRows<t_embeddingDims>() = otherMean;
         return MultivariateTangentNormal{mean, m_cov};
     }
+
+    auto& cholL() const { return m_cholL; }
+    auto& det() const { return m_detInv; }
 
 private:
     friend class boost::serialization::access;

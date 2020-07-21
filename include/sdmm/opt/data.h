@@ -56,12 +56,12 @@ struct Data {
         const ScalarIn& heuristic_pdf_
     ) -> void {
         if(size >= enoki::slices(point)) {
-            if(capacity > enoki::slices(point)) {
-                enoki::set_slices(*this, capacity);
-            } else {
-                // throw std::runtime_error("Data full.\n");
+            // if(capacity > enoki::slices(point)) {
+            //     enoki::set_slices(*this, capacity);
+            // } else {
+                throw std::runtime_error("Data full.\n");
                 return;
-            }
+            // }
         }
         enoki::slice(point, size) = point_;
         enoki::slice(normal, size) = normal_;
@@ -71,14 +71,31 @@ struct Data {
     }
 
     auto clear() -> void { size = 0; }
-    auto reserve(uint32_t new_capacity) -> void { capacity = new_capacity; }
+    auto reserve(uint32_t new_capacity) -> void {
+        capacity = new_capacity; 
+        enoki::set_slices(*this, capacity);
+    }
+
+    auto sum_weights() -> ScalarS {
+        using Float = enoki::Packet<ScalarS, 8>;
+        using Index = enoki::Packet<uint32_t, 8>;
+        Float packet_sum(0);
+        for (auto [index, mask] : enoki::range<Index>(size)) {
+            packet_sum += select(
+                mask,
+                enoki::gather<Float>(weight, index),
+                Index(0)
+            );
+        }
+        return enoki::hsum(packet_sum);
+    }
 
     ENOKI_STRUCT(Data, point, normal, weight, heuristic_pdf);
 };
 
 template<typename SDMM_>
 auto Data<SDMM_>::remove_non_finite() -> void {
-    weight = enoki::select(enoki::isfinite(weight), weight, ScalarS(0));
+    weight = enoki::select(enoki::isfinite(weight) || weight < 0, weight, ScalarS(0));
 }
 
 }

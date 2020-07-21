@@ -23,7 +23,8 @@ template<typename Value> struct inv_sqrt_2_pi_t {
 };
 
 template<> struct inv_sqrt_2_pi_t<float> {
-    static constexpr float value = 0.39894228040143267793994605993438186847585863116492f;
+    static constexpr float value =
+        0.39894228040143267793994605993438186847585863116492f;
 };
 
 template<> struct inv_sqrt_2_pi_t<double> {

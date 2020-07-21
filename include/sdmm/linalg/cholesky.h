@@ -29,7 +29,7 @@ inline void cholesky(
             }
             out(r, c) = (in(r, c) - ksum) / out(c, c);
         }
-        Matrix out_t = sdmm::linalg::transpose(out);
+        Matrix out_t = sdmm::linalg::transpose(out); // TODO: optimize
         Value row_sum = enoki::hsum(out_t.col(r) * out_t.col(r));
         Value value = in(r, r) - row_sum + 1e-5;
         is_psd = is_psd && (value > 0);

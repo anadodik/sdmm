@@ -255,7 +255,7 @@ public:
         jacobianCorrection = on;
     }
 
-    jmm::aligned_vector<Scalar>& getStatsGlobal() { return statsGlobalNormalized.weights; }
+    auto& getStatsGlobal() { return statsGlobal; }
 
     jmm::aligned_vector<Matrixd>& getBPriors() {
         return bPriors;
@@ -308,7 +308,7 @@ public:
             
             // std::cerr << "sample_" << sample_i << ", weight=" << samples.weights(sample_i) << "\n";
             // std::cerr << "sample_" << sample_i << ", point=" << samples.samples.col(sample_i).transpose() << "\n";
-            std::cerr << "sample_" << sample_i << ", posteriors=[";
+            // std::cerr << "sample_" << sample_i << ", posteriors=[";
             for(int component_i = 0; component_i < distribution.nComponents(); ++component_i) {
                 // if(posterior(component_i) < 1e-10) {
                 //     // TODO: still calculate marginals and normalization
@@ -316,7 +316,7 @@ public:
                 // }
 				// Scalar weightAugmented = std::sqrt(samples.weights(sample_i));
                 Scalar weight = samples.weights(sample_i) * posterior(component_i);
-                std::cerr << posterior(component_i) << ", ";
+                // std::cerr << posterior(component_i) << ", ";
                 #if TANGENT_DEBUG == 1
                 if(weight == 0.f) {
                     std::cerr << "Zero weight * posterior: "
@@ -351,7 +351,7 @@ public:
                 }
                 #endif // SPLIT_AND_MERGE == 1
             }
-            std::cerr << "]\n";
+            // std::cerr << "]\n";
         }
     }
 
@@ -699,6 +699,7 @@ public:
                     
                     // TODO: COULD BE THE PROBLEM! Turn off after 3rd iteration or so?
                     eta_i[component_i] = std::pow(learningRate * iterationsRun + 1, -alpha);
+                    // std::cerr << "eta_i=" << eta_i[component_i] << "\n";
                 }
 
                 #pragma omp barrier
@@ -759,6 +760,7 @@ public:
                         1.f / Scalar(std::pow((Scalar) 3, (Scalar) std::min(trainingCutoff, iterationsRun)));
                     newParams.heuristicWeight =
                         niPriorMinusOne * invGlobalDecreaseFactor + statsGlobalNormalized.heuristicWeight;
+                    // std::cerr << "invGlobalDecreaseFactor=" << invGlobalDecreaseFactor << "\n";
                     
                     // #pragma omp for
                     for(int component_i = componentBegin; component_i < componentEnd; ++component_i) {                    
@@ -767,6 +769,7 @@ public:
                         Matrixd decreasedBPrior = decreasedApriorMinusTwo * bPriors[component_i];
                         Scalar invMixtureDecreaseFactor = 
                             1.f / std::pow((Scalar) 2, (Scalar) std::min(trainingCutoff, iterationsRun));
+                        // std::cerr << "invMixtureDecreaseFactor=" << invMixtureDecreaseFactor << "\n";
 
                         if(decreasePrior) {
                             decreasedBPrior = decreasedBPrior * invMixtureDecreaseFactor;

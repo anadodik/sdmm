@@ -153,6 +153,7 @@ auto SDMM<Matrix_, TangentSpace_>::prepare_cov() -> void {
     inv_cov_sqrt_det = 1.f / enoki::hprod(enoki::diag(cov_sqrt));
     bool all_psd = enoki::all(cov_is_psd);
     if(!all_psd) {
+        std::cerr << fmt::format("cov={}\n", cov);
         std::cerr << fmt::format("all_psd={}\n", cov_is_psd);
         assert(all_psd);
     }
@@ -178,11 +179,17 @@ auto SDMM<Matrix_, TangentSpace_>::sample(
     using UInt32 = typename RNG::UInt32;
     UInt32 gaussian_idx = enoki::binary_search(
         0,
-        enoki::slices(weight.cdf),
+        enoki::slices(weight.cdf) - 1,
+        // [&](UInt32 index) {
+        //     return enoki::gather<Float32>(weight.cdf, index) < weight_inv_sample;
+        // }
         [&](UInt32 index) {
-            return enoki::gather<Float32>(weight.cdf, index) < weight_inv_sample;
+            return weight.cdf[index] < weight_inv_sample;
         }
     );
+    while(gaussian_idx > 0 && weight.pmf[gaussian_idx] == 0) {
+        --gaussian_idx;
+    }
 
     // if(enoki::slices(tangent) != enoki::slices(gaussian_idx)) {
     //     enoki::set_slices(tangent, enoki::slices(gaussian_idx)); 
@@ -238,6 +245,7 @@ auto SDMM<Matrix_, TangentSpace_>::pdf_gaussian(
     ScalarExpr inv_jacobian;
     tangent = tangent_space.to(point, inv_jacobian);
     TangentExpr standardized = to_standard_normal(tangent);
+    // spdlog::info("tangent={}", tangent);
     ScalarExpr squared_norm = enoki::squared_norm(standardized);
     pdf =
         inv_cov_sqrt_det *
