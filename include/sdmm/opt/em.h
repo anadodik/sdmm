@@ -187,15 +187,10 @@ auto em_step(SDMM_& distribution, EM<SDMM_>& em, Data<SDMM_>& data) -> void {
     if(enoki::packets(em) != enoki::packets(distribution)) {
         spdlog::warn("Different number of packets!");
     }
-    update_model(distribution, em);
-    // for(size_t packet_i = 0; packet_i < enoki::packets(em); ++packet_i) {
-    //     auto model_packet = enoki::packet(distribution, packet_i);
-    //     auto em_packet = enoki::packet(em, packet_i);
-    //     sdmm::update_model(model_packet, em_packet);
-    // }
-    // enoki::vectorize_safe(
-    //     VECTORIZE_WRAP_MEMBER(update_model), em, distribution
-    // );
+
+    enoki::vectorize_safe(
+        VECTORIZE_WRAP(update_model), distribution, em
+    );
     bool success_prepare = sdmm::prepare(distribution);
     assert(success_prepare);
     ++em.iterations_run;
@@ -210,7 +205,7 @@ auto EM<SDMM_>::step(SDMM_& distribution, Data<SDMM_>& data) -> void {
         return;
     }
     assert(success_normalized);
-    update_model(distribution);
+    update_model(distribution, *this);
     bool success_prepare = sdmm::prepare(distribution);
     assert(success_prepare);
     ++iterations_run;
@@ -227,7 +222,7 @@ auto EM<SDMM_>::compute_stats_model_parallel(
     // );
     for(size_t slice_i = 0; slice_i < data.size; ++slice_i) {
         auto data_slice = enoki::slice(data, slice_i);
-        if(std::isnan(data_slice.weight) || data_slice.weight == 0) {
+        if(std::isnan(data_slice.weight) || data_slice.weight < 1e-8) {
             continue;
         }
         // spdlog::info("slice_{} weight={}", slice_i, data_slice.weight);
@@ -316,17 +311,20 @@ template<typename SDMM_>
 
 template<typename SDMM_>
 auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
-    auto weight_prior_decay = 1.0 / enoki::pow(3.0, enoki::min(30, em.iterations_run));
-    auto cov_prior_strength_decay = 1.0 / enoki::pow(2.0, enoki::min(30, em.iterations_run));
+    using ScalarExpr = typename Stats<SDMM_>::ScalarExpr;
+    using MatrixExpr = typename Stats<SDMM_>::MatrixExpr;
+    ScalarExpr weight_prior_decay = 1.0 / enoki::pow(3.0, enoki::min(30, em.iterations_run));
+    ScalarExpr cov_prior_strength_decay = 1.0 / enoki::pow(2.0, enoki::min(30, em.iterations_run));
+
+    ScalarExpr weight_prior_decayed = em.weight_prior * weight_prior_decay;
+    ScalarExpr cov_prior_strength_decayed = em.cov_prior_strength * cov_prior_strength_decay;
+    MatrixExpr cov_prior_decayed = em.cov_prior * cov_prior_strength_decayed;
+
     // spdlog::info("weight_prior_decay={}", weight_prior_decay);
     // spdlog::info("cov_prior_strength_decay={}", cov_prior_strength_decay);
 
-    auto weight_prior_decayed = em.weight_prior * weight_prior_decay;
-    auto cov_prior_strength_decayed = em.cov_prior_strength * cov_prior_strength_decay;
-    auto cov_prior_decayed = em.cov_prior * cov_prior_strength_decayed;
-
-    auto rcp_weight = 1.f / em.stats_normalized.weight;
-    auto rcp_cov_weight =
+    ScalarExpr rcp_weight = 1.f / em.stats_normalized.weight;
+    ScalarExpr rcp_cov_weight =
         1.f / (cov_prior_strength_decayed + em.stats_normalized.weight);
 
     // Following should always be true:
@@ -355,17 +353,15 @@ auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
         0
     );
 
+    MatrixExpr mean_subtraction = 
+            sdmm::linalg::outer(em.stats_normalized.mean) * rcp_weight;
+    MatrixExpr cov_unnormalized = 
+        em.stats_normalized.cov - mean_subtraction + cov_prior_decayed;
     em.updated_model.cov = enoki::select(
         non_zero_weights && finite_weights,
-        (
-            em.stats_normalized.cov -
-            sdmm::linalg::outer(em.stats_normalized.mean) *
-            rcp_weight +
-            cov_prior_decayed
-        ) * rcp_cov_weight + em.depth_prior,
+        cov_unnormalized * rcp_cov_weight + em.depth_prior,
         distribution.cov
     );
-
     distribution.weight.pmf = em.updated_model.weight;
     typename SDMM_::ScalarExpr inv_jacobian;
     distribution.tangent_space.set_mean(

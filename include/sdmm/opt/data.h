@@ -33,6 +33,9 @@ struct Data {
     Scalar weight;
     Scalar heuristic_pdf;
 
+    EmbeddedS mean_point = 0;
+    EmbeddedS mean_sqr_point = 0;
+
     uint32_t size = 0;
     uint32_t capacity = 0;
 
@@ -55,6 +58,14 @@ struct Data {
         const ScalarIn& weight_,
         const ScalarIn& heuristic_pdf_
     ) -> void {
+
+        if(weight_ == 0) {
+            return;
+        }
+        
+        mean_point += point_;
+        mean_sqr_point += enoki::sqr(point_);
+
         if(size >= enoki::slices(point)) {
             // if(capacity > enoki::slices(point)) {
             //     enoki::set_slices(*this, capacity);
@@ -63,6 +74,7 @@ struct Data {
                 return;
             // }
         }
+
         enoki::slice(point, size) = point_;
         enoki::slice(normal, size) = normal_;
         enoki::slice(weight, size) = weight_;
@@ -70,7 +82,12 @@ struct Data {
         ++size;
     }
 
-    auto clear() -> void { size = 0; }
+    auto clear() -> void {
+        size = 0;
+        mean_point = 0;
+        mean_sqr_point = 0;
+    }
+
     auto reserve(uint32_t new_capacity) -> void {
         capacity = new_capacity; 
         enoki::set_slices(*this, capacity);

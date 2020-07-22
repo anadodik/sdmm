@@ -139,7 +139,7 @@ void optimize(benchmark::State &state) {
         em.interpolate_stats();
         assert(em.normalize_stats(data));
         enoki::vectorize_safe(
-            VECTORIZE_WRAP_MEMBER(update_model), em, distribution
+            VECTORIZE_WRAP(sdmm::update_model), distribution, em
         );
         assert(sdmm::prepare(distribution) == true);
     }

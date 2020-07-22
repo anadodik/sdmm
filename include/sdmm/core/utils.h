@@ -111,9 +111,9 @@ using Vector = sdmm::linalg::Vector<Value_, Size_>;
 template<typename Value, size_t Rows, size_t Cols=Rows>
 using Matrix = sdmm::linalg::Matrix<Value, Rows, Cols>;
 
-template<typename Array, typename Value, size_t Size, typename... Args>
+template<typename Type, typename Value, size_t Size, typename... Args>
 auto full_inner(Args... args) {
-    return Array{enoki::full<Value>(args, Size)...};
+    return Type(enoki::full<Value>(args, Size)...);
 }
 
 // https://stackoverflow.com/questions/81870/is-it-possible-to-print-a-variables-type-in-standard-c
