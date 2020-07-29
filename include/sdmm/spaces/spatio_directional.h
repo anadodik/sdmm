@@ -30,7 +30,7 @@ struct SpatioDirectionalTangentSpace {
 
     using ScalarS = enoki::scalar_t<Scalar>;
     using EmbeddedS = sdmm::Vector<ScalarS, enoki::array_size_v<Embedded>>;
-    using TangentS = sdmm::Vector<ScalarS, enoki::array_size_v<Embedded>>;
+    using TangentS = sdmm::Vector<ScalarS, enoki::array_size_v<Tangent>>;
     using MaskS = enoki::mask_t<ScalarS>;
 
     using Packet = nested_packet_t<Scalar>;
@@ -100,7 +100,7 @@ struct SpatioDirectionalTangentSpace {
             angle / sin_angle
         );
 
-        inv_jacobian = rcp_sinc_angle;
+        inv_jacobian = enoki::select(cos_angle <= -1, 0, rcp_sinc_angle);
         return to_unwrap(
             embedded,
             std::make_index_sequence<Embedded::Size - 3>{},

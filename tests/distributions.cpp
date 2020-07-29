@@ -45,7 +45,7 @@ TEST_CASE("SDMM::pdf<Array>") {
         Value(3, 2), Value(0.5, 0),
         Value(0.5, 0), Value(1.4, 0.1)
     );
-    CHECK(sdmm::prepare(distribution));
+    CHECK(sdmm::prepare_vectorized(distribution));
 
     Value pdf(0);
     SUBCASE("Calculating pdf for point={1, 2}.") {
@@ -93,7 +93,7 @@ TEST_CASE("SDMM<SpatioDirectionalTangentSpace>") {
         Value(1, 0.09), Value(0.5, 0.02), Value(4, 2)
     );
 
-    CHECK(sdmm::prepare(distribution));
+    CHECK(sdmm::prepare_vectorized(distribution));
     Value pdf(0);
     enoki::set_slices(pdf, 2);
     sdmm::embedded_s_t<SDMM> point({2, 1, 0, 0});
@@ -128,7 +128,7 @@ TEST_CASE("SDMM<DirectionalTangentSpace>") {
         Value(0.5, 0), Value(1.4, 0.1)
     );
 
-    CHECK(sdmm::prepare(distribution));
+    CHECK(sdmm::prepare_vectorized(distribution));
     Value pdf(0);
     enoki::set_slices(pdf, 2);
     sdmm::embedded_s_t<SDMM> point({1, 0, 0});
@@ -162,7 +162,7 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
         Value(0.5, 0), Value(1.4, 0.1)
     );
 
-    CHECK(sdmm::prepare(distribution));
+    CHECK(sdmm::prepare_vectorized(distribution));
 
     sdmm::EuclidianTangentSpace<
         sdmm::Vector<Value, 3>, sdmm::Vector<Value, 3>
@@ -280,7 +280,7 @@ TEST_CASE("SDMM::pdf<DynamicArray>") {
             Value(0.4, 0.4), Value(0.2, 0.2), Value(0.2, 0.2), Value(3, 3)
         );
 
-        CHECK(sdmm::prepare(distribution));
+        CHECK(sdmm::prepare_vectorized(distribution));
         Conditioner conditioner;
         enoki::set_slices(conditioner, enoki::slices(distribution));
         

@@ -49,7 +49,7 @@ void copy_sdmm(JMM& jmm, SDMM& sdmm) {
     for(size_t component_i = 0; component_i < NComponents; ++component_i) {
         enoki::slice(sdmm.weight.pmf, component_i) = jmm.weights()[component_i];
     }
-    bool prepare_success = sdmm::prepare(sdmm);
+    bool prepare_success = sdmm::prepare_vectorized(sdmm);
     CHECK_EQ(prepare_success, true);
 }
 
@@ -99,7 +99,7 @@ void init_sdmm(JointSDMM& distribution) {
         enoki::full<Value>(1.f / NComponents, NComponents);
     spdlog::info("pmf={}", distribution.weight.pmf);
     distribution.cov = enoki::identity<sdmm::matrix_t<JointSDMM>>(NComponents);
-    bool prepare_success = sdmm::prepare(distribution);
+    bool prepare_success = sdmm::prepare_vectorized(distribution);
     CHECK_EQ(prepare_success, true);
 }
 
@@ -321,8 +321,7 @@ TEST_CASE("sampling/pdf comparison") {
         });
         // sdmm::create_conditional(conditioner, point, conditional);
 
-        Value inv_jacobian;
-        enoki::set_slices(inv_jacobian, 1);
+        Scalar inv_jacobian;
         sdmm::replace_embedded_t<ConditionalSDMM, Scalar> sample;
         sdmm::replace_tangent_t<ConditionalSDMM, Scalar> tangent_sample;
         

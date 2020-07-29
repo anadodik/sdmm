@@ -65,11 +65,6 @@ auto Categorical<Value_>::normalize(
 
 template<typename Value_>
 [[nodiscard]] auto Categorical<Value_>::prepare() -> BoolOuter {
-    // BoolOuter valid = enoki::vectorize(
-    //     VECTORIZE_WRAP_MEMBER(is_valid),
-    //     *this
-    // );
-
     size_t n_slices = enoki::slices(pmf);
     if(enoki::slices(cdf) != n_slices) {
         enoki::set_slices(cdf, n_slices);
@@ -88,7 +83,6 @@ template<typename Value_>
 
     // This can be further optimized by
     // only iterating over cdfs which have non-zero sums.
-    // normalize(inv_normalizer);
     enoki::vectorize(
         VECTORIZE_WRAP_MEMBER(normalize), *this, inv_normalizer
     );

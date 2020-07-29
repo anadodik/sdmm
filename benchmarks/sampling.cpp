@@ -44,7 +44,7 @@ void sampling(benchmark::State &state) {
     distribution.weight.pmf =
         enoki::full<decltype(distribution.weight.pmf)>(1.f / NComponents, NComponents);
     distribution.cov = enoki::identity<JointCov>(NComponents);
-    bool prepare_success = sdmm::prepare(distribution);
+    bool prepare_success = sdmm::prepare_vectorized(distribution);
     assert(prepare_success == true);
 
     constexpr static int NSamples = 4;

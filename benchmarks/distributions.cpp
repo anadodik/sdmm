@@ -155,7 +155,7 @@ void conditioning(benchmark::State &state) {
     distribution.tangent_space.mean = enoki::full<sdmm::embedded_s_t<JointSDMM>>(1, NComponents);
     distribution.weight.pmf = enoki::full<decltype(distribution.weight.pmf)>(1.f / NComponents, NComponents);
     distribution.cov = enoki::identity<sdmm::matrix_t<JointSDMM>>(NComponents);
-    assert(sdmm::prepare(distribution) == true);
+    assert(sdmm::prepare_vectorized(distribution) == true);
 
     Conditioner conditioner;
     enoki::set_slices(conditioner, enoki::slices(distribution));
@@ -230,7 +230,7 @@ void conditioning_spatio_directional(benchmark::State &state) {
     distribution.weight.pmf =
         enoki::full<decltype(distribution.weight.pmf)>(1.f / NComponents, NComponents);
     distribution.cov = enoki::identity<sdmm::matrix_t<JointSDMM>>(NComponents);
-    assert(sdmm::prepare(distribution) == true);
+    assert(sdmm::prepare_vectorized(distribution) == true);
 
     Conditioner conditioner;
     enoki::set_slices(conditioner, enoki::slices(distribution));

@@ -90,9 +90,10 @@ struct SDMM {
     using Packet = nested_packet_t<Scalar>;
 
     auto prepare_cov() -> void;
+    auto prepare();
 
-    template<typename RNG, typename EmbeddedIn, typename TangentIn>
-    auto sample(RNG& rng, EmbeddedIn& sample, Scalar& inv_jacobian, TangentIn& tangent) const -> void;
+    template<typename RNG, typename EmbeddedIn, typename ScalarIn, typename TangentIn>
+    auto sample(RNG& rng, EmbeddedIn& sample, ScalarIn& inv_jacobian, TangentIn& tangent) const -> void;
 
     template<typename EmbeddedIn, typename TangentIn>
     auto pdf_gaussian(const EmbeddedIn& point, Scalar& pdf, TangentIn& tangent) const -> void;
@@ -107,7 +108,6 @@ struct SDMM {
     auto posterior(const EmbeddedIn& point, Scalar& posterior) const -> void;
 
     auto to_standard_normal(const Tangent& point) const -> TangentExpr;
-
 
     // Make sure to update the ENOKI_STRUCT and ENOKI_STRUCT_SUPPORT
     // declarations when modifying these variables.
@@ -134,7 +134,7 @@ struct SDMM {
 };
 
 template<typename SDMM>
-[[nodiscard]] inline auto prepare(SDMM& distribution) {
+[[nodiscard]] inline auto prepare_vectorized(SDMM& distribution) {
     if constexpr(enoki::is_dynamic_v<SDMM>) {
         enoki::vectorize(
             VECTORIZE_WRAP_MEMBER(prepare_cov),
@@ -144,6 +144,12 @@ template<typename SDMM>
         distribution.prepare_cov();
     }
     return distribution.weight.prepare();
+}
+
+template<typename Matrix_, typename TangentSpace_>
+auto SDMM<Matrix_, TangentSpace_>::prepare() {
+	prepare_cov();
+	return weight.prepare();
 }
 
 // TODO: make [[nodiscard]] and check cov_is_psd
@@ -170,9 +176,9 @@ auto box_mueller_transform(const Value& u1, const Value& u2)
 }
 
 template<typename Matrix_, typename TangentSpace_>
-template<typename RNG, typename EmbeddedIn, typename TangentIn>
+template<typename RNG, typename EmbeddedIn, typename ScalarIn, typename TangentIn>
 auto SDMM<Matrix_, TangentSpace_>::sample(
-    RNG& rng, EmbeddedIn& sample, Scalar& inv_jacobian, TangentIn& tangent
+    RNG& rng, EmbeddedIn& sample, ScalarIn& inv_jacobian, TangentIn& tangent
 ) const -> void {
     auto weight_inv_sample = rng.next_float32();
     using Float32 = typename RNG::Float32;
@@ -219,7 +225,7 @@ auto SDMM<Matrix_, TangentSpace_>::sample(
     // if(enoki::slices(inv_jacobian) != enoki::slices(gaussian_idx)) {
     //     enoki::set_slices(inv_jacobian, enoki::slices(gaussian_idx)); 
     // }
-    sample = enoki::slice(tangent_space, gaussian_idx).from(tangent, inv_jacobian.coeff(0));
+    sample = enoki::slice(tangent_space, gaussian_idx).from(tangent, inv_jacobian);
     // for(size_t ts_i = 0; ts_i < enoki::slices(gaussian_idx); ++ts_i) {
     //     uint32_t index = gaussian_idx.coeff(ts_i);
     //     enoki::slice(sample, ts_i) =
@@ -269,6 +275,7 @@ auto SDMM<Matrix_, TangentSpace_>::pdf_gaussian(
     pdf_gaussian(point, pdf, tangent);
 }
 
+// TODO: move normalization to this function.
 template<typename Matrix_, typename TangentSpace_>
 template<typename EmbeddedIn, typename TangentIn>
 auto SDMM<Matrix_, TangentSpace_>::posterior(
@@ -278,6 +285,7 @@ auto SDMM<Matrix_, TangentSpace_>::posterior(
     posterior *= weight.pmf;
 }
 
+// TODO: move normalization to this function.
 template<typename Matrix_, typename TangentSpace_>
 template<typename EmbeddedIn>
 auto SDMM<Matrix_, TangentSpace_>::posterior(

@@ -110,7 +110,7 @@ void optimize(benchmark::State &state) {
     distribution.weight.pmf =
         enoki::full<decltype(distribution.weight.pmf)>(1.f / NComponents, NComponents);
     distribution.cov = enoki::identity<JointCov>(NComponents);
-    assert(sdmm::prepare(distribution) == true);
+    assert(sdmm::prepare_vectorized(distribution) == true);
 
     using Data = sdmm::Data<JointSDMM>;
     constexpr static size_t NPoints = 1000000;
@@ -141,7 +141,7 @@ void optimize(benchmark::State &state) {
         enoki::vectorize_safe(
             VECTORIZE_WRAP(sdmm::update_model), distribution, em
         );
-        assert(sdmm::prepare(distribution) == true);
+        assert(sdmm::prepare_vectorized(distribution) == true);
     }
 }
 

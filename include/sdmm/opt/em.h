@@ -6,10 +6,10 @@
 #include "sdmm/distributions/sdmm.h"
 #include "sdmm/opt/data.h"
 
-#define THROW_ON_FAIL(EXPR) \
+#define WARN_ON_FAIL(EXPR) \
     do { \
         if(!EXPR) { \
-            throw std::runtime_error(#EXPR); \
+            spdlog::warn(#EXPR); \
         } \
     } while(0)
 
@@ -178,12 +178,15 @@ auto EM<SDMM_>::set_priors(
 template<typename SDMM_>
 auto em_step(SDMM_& distribution, EM<SDMM_>& em, Data<SDMM_>& data) -> void {
     em.compute_stats_model_parallel(distribution, data);
+    spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
     em.interpolate_stats();
+    spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
     bool success_normalized = em.normalize_stats(data);
     if(!success_normalized) {
         return;
     }
     assert(success_normalized);
+    spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
     if(enoki::packets(em) != enoki::packets(distribution)) {
         spdlog::warn("Different number of packets!");
     }
@@ -191,7 +194,8 @@ auto em_step(SDMM_& distribution, EM<SDMM_>& em, Data<SDMM_>& data) -> void {
     enoki::vectorize_safe(
         VECTORIZE_WRAP(update_model), distribution, em
     );
-    bool success_prepare = sdmm::prepare(distribution);
+    spdlog::info("distribution.mean={}", distribution.tangent_space.mean);
+    bool success_prepare = sdmm::prepare_vectorized(distribution);
     assert(success_prepare);
     ++em.iterations_run;
 }
@@ -206,7 +210,7 @@ auto EM<SDMM_>::step(SDMM_& distribution, Data<SDMM_>& data) -> void {
     }
     assert(success_normalized);
     update_model(distribution, *this);
-    bool success_prepare = sdmm::prepare(distribution);
+    bool success_prepare = sdmm::prepare_vectorized(distribution);
     assert(success_prepare);
     ++iterations_run;
 }
@@ -311,6 +315,7 @@ template<typename SDMM_>
 
 template<typename SDMM_>
 auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
+    spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
     using ScalarExpr = typename Stats<SDMM_>::ScalarExpr;
     using MatrixExpr = typename Stats<SDMM_>::MatrixExpr;
     ScalarExpr weight_prior_decay = 1.0 / enoki::pow(3.0, enoki::min(30, em.iterations_run));
@@ -328,16 +333,17 @@ auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
         1.f / (cov_prior_strength_decayed + em.stats_normalized.weight);
 
     // Following should always be true:
-    THROW_ON_FAIL(enoki::all(enoki::isfinite(em.stats_normalized.weight)));
-    THROW_ON_FAIL(enoki::all(enoki::isfinite(rcp_cov_weight)));
-    THROW_ON_FAIL(enoki::all(enoki::isfinite(distribution.weight.pmf)));
-    THROW_ON_FAIL(enoki::any(distribution.weight.pmf > 0));
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(em.stats_normalized.weight)));
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(rcp_cov_weight)));
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(distribution.weight.pmf)));
+    WARN_ON_FAIL(enoki::any(distribution.weight.pmf > 0));
 
     auto non_zero_weights = distribution.weight.pmf > 0;
     auto finite_weights = enoki::isfinite(rcp_weight);
 
     if(!enoki::all(finite_weights)) {
-        return;
+        WARN_ON_FAIL(enoki::all(finite_weights));
+        // return;
     }
 
     // TODO: need to check whether number * rcp_cov_weight overflows or is nan!
