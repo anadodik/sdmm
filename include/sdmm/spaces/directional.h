@@ -18,7 +18,7 @@ struct DirectionalTangentSpace {
     using Embedded = Embedded_;
     using Tangent = Tangent_;
     using Mask = enoki::mask_t<Embedded_>;
-    using Matrix = enoki::Matrix<Scalar, 3>;
+    using Matrix = sdmm::Matrix<Scalar, 3>;
 
     using ScalarExpr = enoki::expr_t<Scalar>;
     using EmbeddedExpr = enoki::expr_t<Embedded>;
@@ -57,10 +57,6 @@ struct DirectionalTangentSpace {
 
     template<typename TangentIn>
     auto from(const TangentIn& tangent, ScalarExpr& inv_jacobian) const -> EmbeddedExpr {
-        // if(length >= M_PI) {
-        //     embedding = EmbeddingVectord::Zero();
-        //     return false;
-        // }
         ScalarExpr length = enoki::norm(tangent);
         auto [sin_angle, cos_angle] = enoki::sincos(length);
         const ScalarExpr sinc_angle = enoki::select(
@@ -77,6 +73,115 @@ struct DirectionalTangentSpace {
         };
 
         return coordinate_system.from * embedded_local;
+    }
+
+    auto to_center_jacobian() const -> sdmm::Matrix<ScalarExpr, 2, 3> {
+        using Jacobian = sdmm::Matrix<ScalarExpr, 2, 3>;
+        Jacobian jacobian = enoki::zero<Jacobian>();
+        jacobian(0, 0) = enoki::full<ScalarExpr>(1, enoki::slices(jacobian));
+        jacobian(1, 1) = enoki::full<ScalarExpr>(1, enoki::slices(jacobian));
+        return jacobian * coordinate_system.to;
+    }
+
+    auto from_center_jacobian() const -> sdmm::Matrix<ScalarExpr, 3, 2> {
+        using Jacobian = sdmm::Matrix<ScalarExpr, 3, 2>;
+        Jacobian jacobian = enoki::zero<Jacobian>();
+        jacobian(0, 0) = enoki::full<ScalarExpr>(1, enoki::slices(jacobian));
+        jacobian(1, 1) = enoki::full<ScalarExpr>(1, enoki::slices(jacobian));
+        return coordinate_system.from * jacobian;
+    }
+
+    template<typename EmbeddedIn>
+    auto to_jacobian(
+        const EmbeddedIn& embedded
+    ) const -> std::pair<TangentExpr, sdmm::Matrix<ScalarExpr, 2, 3>> {
+        ScalarExpr inv_jacobian;
+        return to_jacobian(embedded, inv_jacobian);
+    }
+
+    // Calculates the Jacobian matrix approximation for the transformation
+    // \exp_{\mu} ( \vec{x} )
+    template<typename EmbeddedIn>
+    auto to_jacobian(
+        const EmbeddedIn& embedded,
+        ScalarExpr& inv_jacobian
+    ) const -> std::pair<TangentExpr, sdmm::Matrix<ScalarExpr, 2, 3>> {
+        using Jacobian = sdmm::Matrix<ScalarExpr, 2, 3>;
+        Jacobian jacobian;
+
+        const EmbeddedExpr embedded_local = coordinate_system.to * embedded;
+        const ScalarExpr cos_angle = embedded_local.z();
+
+        const ScalarExpr angle = enoki::safe_acos(cos_angle);
+        const ScalarExpr sin_angle_sqr = 1 - cos_angle * cos_angle;
+        const ScalarExpr sin_angle = enoki::safe_sqrt(sin_angle_sqr);
+        const ScalarExpr rcp_sinc_angle = enoki::select(
+            sin_angle < 1e-4,
+            ScalarExpr(1),
+            angle / sin_angle
+        );
+        inv_jacobian = enoki::select(cos_angle <= -1, 0, rcp_sinc_angle);
+
+        jacobian(0, 0) = rcp_sinc_angle;
+        jacobian(1, 1) = rcp_sinc_angle;
+
+        jacobian(0, 1) = enoki::zero<ScalarExpr>(enoki::slices(rcp_sinc_angle));
+        jacobian(1, 0) = enoki::zero<ScalarExpr>(enoki::slices(rcp_sinc_angle));
+
+        ScalarExpr inv_sin_angle_sqr = 1 / sin_angle_sqr;
+        ScalarExpr temp_expr = (cos_angle * rcp_sinc_angle - 1) * inv_sin_angle_sqr;
+        jacobian(0, 2) = embedded_local.coeff(0) * temp_expr;
+        jacobian(1, 2) = embedded_local.coeff(1) * temp_expr;
+
+        jacobian = jacobian * coordinate_system.to;
+
+        TangentExpr tangent{
+            embedded_local.x() * rcp_sinc_angle,
+            embedded_local.y() * rcp_sinc_angle
+        };
+
+        return {tangent, jacobian};
+    }
+
+    // Calculates the Jacobian matrix approximation for the transformation
+    // \log_{\mu} ( \vec{t} )
+    template<typename TangentIn>
+    auto from_jacobian(
+        const TangentIn& tangent
+    ) const -> std::pair<EmbeddedExpr, sdmm::Matrix<ScalarExpr, 3, 2>> {
+        using Jacobian = sdmm::Matrix<ScalarExpr, 3, 2>;
+        Jacobian jacobian = enoki::zero<Jacobian>();
+
+        const ScalarExpr length_sqr = enoki::squared_norm(tangent);
+        const ScalarExpr length = enoki::sqrt(length_sqr);
+        auto [sin_angle, cos_angle] = enoki::sincos(length);
+        const ScalarExpr sinc_angle = enoki::select(
+            sin_angle < 1e-4,
+            ScalarExpr(1),
+            sin_angle / length
+        );
+
+        ScalarExpr cos_minus_sinc_over_length_sqr =
+            (cos_angle - sinc_angle) / length_sqr;
+        jacobian(0, 0) = sinc_angle + tangent.coeff(0) * tangent.coeff(0) * cos_minus_sinc_over_length_sqr;
+        jacobian(1, 1) = sinc_angle + tangent.coeff(1) * tangent.coeff(1) * cos_minus_sinc_over_length_sqr;
+
+        ScalarExpr off_diagonal = tangent.coeff(0) * tangent.coeff(1) * cos_minus_sinc_over_length_sqr;
+        jacobian(0, 1) = off_diagonal;
+        jacobian(1, 0) = off_diagonal;
+
+        jacobian(2, 0) = -tangent.coeff(0) * sinc_angle;
+        jacobian(2, 1) = -tangent.coeff(1) * sinc_angle;
+
+        jacobian = coordinate_system.from * jacobian;
+
+        const EmbeddedExpr embedded_local{
+            tangent.x() * sinc_angle,
+            tangent.y() * sinc_angle,
+            cos_angle
+        };
+
+        return {coordinate_system.from * embedded_local, jacobian};
     }
 
     auto set_mean(const Embedded& mean_) -> void {

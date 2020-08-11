@@ -56,6 +56,8 @@ auto add_directional(py::module& m) {
         .def("set_mean", py::overload_cast<const Embedded&>(&TangentSpace::set_mean), "mean"_a)
         .def("to_tangent", &TangentSpace::template to<EmbeddedS>, "embedded"_a, "inv_jacobian"_a)
         .def("from_tangent", &TangentSpace::template from<TangentS>, "tangent"_a, "inv_jacobian"_a)
+        .def("to_center_jacobian", &TangentSpace::to_center_jacobian)
+        .def("from_jacobian", &TangentSpace::template from_jacobian<TangentS>, "tangent"_a)
         .def("from_tangent_many", [](TangentSpace& ts, Tangent& tangent) -> std::pair<Embedded, Value> {
             if(enoki::slices(ts) != 1) {
                 throw std::runtime_error("tangent_space can only have one slice for from_tangent_many");
@@ -143,6 +145,28 @@ auto add_mm(py::module& m, const std::string& name) {
 		.def_readwrite("tangent_space", &SDMM::tangent_space)
 		.def_readwrite("cov", &SDMM::cov)
 		.def("prepare", &SDMM::prepare)
+		.def(
+            "save",
+            [](SDMM& sdmm, const std::string& path) {
+                sdmm::save_json<SDMM>(sdmm, path);
+            },
+            "path"_a
+        )
+        .def(
+            "load",
+            [](SDMM& sdmm, const std::string& path) {
+                sdmm::load_json<SDMM>(sdmm, path);
+            },
+            "path"_a
+        )
+		.def(
+            "product",
+            [](SDMM& first, SDMM& second) {
+                SDMM result;
+                sdmm::product(first, second, result);
+                return result;
+            }
+        )
 		.def(
 			"pdf",
 			[](SDMM& sdmm, const Embedded& embedded) {
@@ -282,14 +306,10 @@ PYBIND11_MODULE(pysdmm, m) {
     add_sdmm<4>(dist_m, opt_m);
     // add_sdmm<5>(dist_m, opt_m);
 
-    // add_gmm<2>(dist_m, opt_m);
+    add_gmm<2>(dist_m, opt_m);
     // add_gmm<3>(dist_m, opt_m);
     // add_gmm<4>(dist_m, opt_m);
     // add_gmm<5>(dist_m, opt_m);
 
     add_dmm(dist_m, opt_m);
-
-	// TODO:
-	// 1. sampling X
-	// 2. optimization
 }

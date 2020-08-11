@@ -1,6 +1,11 @@
 #pragma once
 
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+
 #include <fmt/ostream.h>
+#include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
 #include <enoki/array.h>
@@ -17,7 +22,103 @@
         return std::forward<decltype(obj)>(obj).FUNC_NAME(params...); \
     }
 
+namespace nlohmann {
+    template <typename T>
+    struct adl_serializer<enoki::DynamicArray<T>> {
+        static void to_json(json& j, const enoki::DynamicArray<T>& array) {
+            j["size"] = array.size();
+            for(size_t i = 0; i < array.size(); ++i) {
+                j["data"].push_back(enoki::slice(array, i));
+            }
+        }
+
+        static void from_json(const json& j, enoki::DynamicArray<T>& array) {
+            enoki::set_slices(array, j["size"]);
+            for(size_t i = 0; i < array.size(); ++i) {
+                enoki::slice(array, i) = j["data"][i];
+            }
+        }
+    };
+
+    template<typename T, size_t Size>
+    struct adl_serializer<enoki::Array<T, Size>> {
+        static void to_json(json& j, const enoki::Array<T, Size>& array) {
+            for(size_t i = 0; i < Size; ++i) {
+                auto coeff = array.coeff(i);
+                j["data"].push_back(coeff);
+            }
+        }
+
+        static void from_json(const json& j, enoki::Array<T, Size>& array) {
+            for(size_t i = 0; i < Size; ++i) {
+                array.coeff(i) = j["data"][i];
+            }
+        }
+    };
+
+    template<typename T, size_t Size>
+    struct adl_serializer<sdmm::linalg::Vector<T, Size>> {
+        static void to_json(json& j, const sdmm::linalg::Vector<T, Size>& array) {
+            for(size_t i = 0; i < Size; ++i) {
+                auto coeff = array.coeff(i);
+                j["data"].push_back(coeff);
+            }
+        }
+
+        static void from_json(const json& j, sdmm::linalg::Vector<T, Size>& array) {
+            for(size_t i = 0; i < Size; ++i) {
+                array.coeff(i) = j["data"][i].get<T>();
+            }
+        }
+    };
+
+    template<typename T, size_t Size>
+    struct adl_serializer<sdmm::linalg::Matrix<T, Size>> {
+        static void to_json(json& j, const sdmm::linalg::Matrix<T, Size>& array) {
+            for(size_t c = 0; c < Size; ++c) {
+                for(size_t r = 0; r < Size; ++r) {
+                    auto coeff = array(c, r);
+                    j["data"].push_back(coeff);
+                }
+            }
+        }
+
+        static void from_json(const json& j, sdmm::linalg::Matrix<T, Size>& array) {
+            size_t i = 0;
+            for(size_t c = 0; c < Size; ++c) {
+                for(size_t r = 0; r < Size; ++r) {
+                    array(c, r) = j["data"][i];
+                    ++i;
+                }
+            }
+        }
+    };
+}
+
 namespace sdmm {
+
+using namespace nlohmann;
+namespace fs = std::filesystem;
+
+template<typename T>
+auto save_json(const T& t, const fs::path& path) {
+    json j;
+    j = t;
+    std::ofstream file(path);
+    file << std::setw(4) << j << std::endl;
+    std::cerr << std::setw(4) << j << std::endl;
+}
+
+template<typename T>
+auto load_json(T& t, const fs::path& path) {
+    std::ifstream file(path);
+    json j;
+    file >> j;
+    std::cerr << std::setw(4) << j << std::endl;
+    t = j.get<T>();
+    t.tangent_space.set_mean(t.tangent_space.mean);
+    t.prepare();
+}
 
 template<typename Func, typename... Args>
 auto vectorize(const Func& func, Args&&... args) {

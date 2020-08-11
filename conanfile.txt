@@ -6,7 +6,7 @@ doctest/2.4.0@_/_
 boost/1.73.0@_/_
 benchmark/1.5.0@_/_
 pybind11/2.5.0@_/_
-# nlohmann_json/3.8.0@_/_
+nlohmann_json/3.9.1@_/_
 # openexr/2.4.0@_/_
 # pcg-cpp/latest@signal9/stable
 
