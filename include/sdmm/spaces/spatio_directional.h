@@ -143,21 +143,13 @@ struct SpatioDirectionalTangentSpace {
 
     auto set_mean(const Embedded& mean_) -> void {
         mean = mean_;
-        coordinate_system.prepare({
+        DirectionalEmbeddedExpr directional_mean(
             mean.coeff(Embedded::Size - 3),
             mean.coeff(Embedded::Size - 2),
-            mean.coeff(Embedded::Size - 1),
-        });
-    }
-
-    auto set_mean(Embedded&& mean_) -> void {
-        mean = std::move(mean_);
-        coordinate_system.prepare({
-            mean.coeff(Embedded::Size - 3),
-            mean.coeff(Embedded::Size - 2),
-            mean.coeff(Embedded::Size - 1),
-        });
-        // coordinate_system.prepare(mean);
+            mean.coeff(Embedded::Size - 1)
+        );
+        directional_mean = enoki::normalize(directional_mean);
+        coordinate_system.prepare(directional_mean);
     }
 
     Embedded mean;

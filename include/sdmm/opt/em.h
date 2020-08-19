@@ -178,15 +178,15 @@ auto EM<SDMM_>::set_priors(
 template<typename SDMM_>
 auto em_step(SDMM_& distribution, EM<SDMM_>& em, Data<SDMM_>& data) -> void {
     em.compute_stats_model_parallel(distribution, data);
-    spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
+    // spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
     em.interpolate_stats();
-    spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
+    // spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
     bool success_normalized = em.normalize_stats(data);
     if(!success_normalized) {
         return;
     }
     assert(success_normalized);
-    spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
+    // spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
     if(enoki::packets(em) != enoki::packets(distribution)) {
         spdlog::warn("Different number of packets!");
     }
@@ -194,7 +194,7 @@ auto em_step(SDMM_& distribution, EM<SDMM_>& em, Data<SDMM_>& data) -> void {
     enoki::vectorize_safe(
         VECTORIZE_WRAP(update_model), distribution, em
     );
-    spdlog::info("distribution.mean={}", distribution.tangent_space.mean);
+    // spdlog::info("distribution.mean={}", distribution.tangent_space.mean);
     bool success_prepare = sdmm::prepare_vectorized(distribution);
     assert(success_prepare);
     ++em.iterations_run;
@@ -315,7 +315,7 @@ template<typename SDMM_>
 
 template<typename SDMM_>
 auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
-    spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
+    // spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
     using ScalarExpr = typename Stats<SDMM_>::ScalarExpr;
     using MatrixExpr = typename Stats<SDMM_>::MatrixExpr;
     ScalarExpr weight_prior_decay = 1.0 / enoki::pow(3.0, enoki::min(30, em.iterations_run));

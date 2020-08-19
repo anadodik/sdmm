@@ -1,7 +1,6 @@
 #pragma once
 
 #include <enoki/array.h>
-#include <enoki/matrix.h>
 
 #include <fmt/ostream.h>
 #include <spdlog/spdlog.h>

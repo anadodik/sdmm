@@ -174,6 +174,7 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_vector
         )
     );
     marginal.posterior(point, out.weight.pmf);
+    out.cov = conditional.cov;
     out.cov_sqrt = conditional.cov_sqrt;
     out.inv_cov_sqrt_det = conditional.inv_cov_sqrt_det;
 }

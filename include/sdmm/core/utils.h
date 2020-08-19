@@ -106,7 +106,7 @@ auto save_json(const T& t, const fs::path& path) {
     j = t;
     std::ofstream file(path);
     file << std::setw(4) << j << std::endl;
-    std::cerr << std::setw(4) << j << std::endl;
+    // std::cerr << std::setw(4) << j << std::endl;
 }
 
 template<typename T>
@@ -114,7 +114,7 @@ auto load_json(T& t, const fs::path& path) {
     std::ifstream file(path);
     json j;
     file >> j;
-    std::cerr << std::setw(4) << j << std::endl;
+    // std::cerr << std::setw(4) << j << std::endl;
     t = j.get<T>();
     t.tangent_space.set_mean(t.tangent_space.mean);
     t.prepare();

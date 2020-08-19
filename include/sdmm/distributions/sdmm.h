@@ -4,8 +4,6 @@
 
 #include <enoki/array.h>
 #include <enoki/dynamic.h>
-#include <enoki/matrix.h>
-#include <enoki/random.h>
 
 #include <fmt/ostream.h>
 #include <spdlog/spdlog.h>
@@ -14,9 +12,6 @@
 #include "sdmm/core/utils.h"
 #include "sdmm/distributions/categorical.h"
 #include "sdmm/linalg/cholesky.h"
-#include "sdmm/spaces/euclidian.h"
-#include "sdmm/spaces/directional.h"
-#include "sdmm/spaces/spatio_directional.h"
 
 namespace sdmm {
 
@@ -89,8 +84,8 @@ struct SDMM {
 
     using Packet = nested_packet_t<Scalar>;
 
-    auto prepare_cov() -> void;
-    auto prepare();
+    auto prepare_cov() -> MaskExpr;
+    auto prepare() -> MaskExpr;
 
     template<typename RNG, typename EmbeddedIn, typename ScalarIn, typename TangentIn>
     auto sample(RNG& rng, EmbeddedIn& sample, ScalarIn& inv_jacobian, TangentIn& tangent) const -> void;
@@ -147,21 +142,27 @@ template<typename SDMM>
 }
 
 template<typename Matrix_, typename TangentSpace_>
-auto SDMM<Matrix_, TangentSpace_>::prepare() {
-	prepare_cov();
-	return weight.prepare();
+auto SDMM<Matrix_, TangentSpace_>::prepare() -> MaskExpr {
+    MaskExpr is_psd = prepare_cov();
+    weight.pmf &= is_psd;
+	if(!weight.prepare()) {
+        spdlog::info("all weights 0");
+        return is_psd; // MaskExpr(false);
+    }
+	return is_psd;
 }
 
 template<typename Matrix_, typename TangentSpace_>
-auto SDMM<Matrix_, TangentSpace_>::prepare_cov() -> void {
+auto SDMM<Matrix_, TangentSpace_>::prepare_cov() -> MaskExpr {
     sdmm::linalg::cholesky(cov, cov_sqrt, cov_is_psd);
     inv_cov_sqrt_det = 1.f / enoki::hprod(enoki::diag(cov_sqrt));
     bool all_psd = enoki::all(cov_is_psd);
-    if(!all_psd) {
-        std::cerr << fmt::format("cov={}\n", cov);
-        std::cerr << fmt::format("all_psd={}\n", cov_is_psd);
-        assert(all_psd);
-    }
+    // if(!all_psd) {
+    //     std::cerr << fmt::format("cov={}\n", cov);
+    //     std::cerr << fmt::format("all_psd={}\n", cov_is_psd);
+    //     assert(all_psd);
+    // }
+    return cov_is_psd;
 }
 
 template<typename Value>
@@ -314,74 +315,95 @@ auto product(SDMM& first, SDMM& second, SDMM& result) {
     using EmbeddedS = sdmm::embedded_s_t<SDMM>;
     using TangentS = sdmm::tangent_s_t<SDMM>;
     using MatrixS = sdmm::matrix_s_t<SDMM>;
+    using ScalarExpr = ScalarS;
+    using MatrixExpr = MatrixS;
+
     size_t first_size = enoki::slices(first);
     size_t second_size = enoki::slices(second);
     size_t product_size = first_size * second_size;
-    enoki::set_slices(result, product_size);
 
-    size_t first_packets = enoki::packets(first);
-    size_t product_packets = enoki::packets(result);
+    if(enoki::slices(result) != product_size) {
+        enoki::set_slices(result, product_size);
+    }
 
-    for(size_t first_i = 0; first_i < first_packets; ++first_i) {
+    bool use_jacobian_correction = false;
+
+    for(size_t first_i = 0; first_i < first_size; ++first_i) {
         for(size_t second_i = 0; second_i < second_size; ++second_i) {
-            size_t product_i = first_i + second_i * first_packets;
+            size_t product_i = first_i + second_i * first_size;
 
-            auto first_weight = enoki::packet(first.weight.pmf, first_i);
-            auto second_weight = enoki::slice(second.weight.pmf, second_i);
-            using ScalarExpr = decltype(first_weight);
-
-            auto first_cov = enoki::packet(first.cov, first_i);
+            MatrixExpr first_cov = enoki::slice(first.cov, first_i);
             MatrixS second_cov_original = enoki::slice(second.cov, second_i);
 
-            auto first_ts = enoki::packet(first.tangent_space, first_i);
-            auto second_ts = enoki::slice(second.tangent_space, second_i);
+            auto&& first_ts = enoki::slice(first.tangent_space, first_i);
+            auto&& second_ts = enoki::slice(second.tangent_space, second_i);
+
+            auto dot = enoki::dot(first_ts.mean, second_ts.mean);
 
             TangentS first_mean = enoki::zero<TangentS>();
             EmbeddedS second_mean_embedded = second_ts.mean;
             auto from_center_jacobian = second_ts.from_center_jacobian();
             ScalarExpr inv_jacobian;
             auto [second_mean, to_jacobian] = first_ts.to_jacobian(second_mean_embedded, inv_jacobian);
-            auto J = to_jacobian * from_center_jacobian;
+            MatrixExpr J = to_jacobian * from_center_jacobian;
 
-            auto second_cov = J * second_cov_original * linalg::transpose(J);
-            spdlog::info("second_cov={}", second_cov);
-
-            auto cov_sum = first_cov + second_cov;
-            decltype(cov_sum) cov_sum_sqrt;
+            // spdlog::info("J_to={}", J);
+            MatrixExpr second_cov = J * second_cov_original * linalg::transpose(J);
+            // spdlog::info("fc={}, first_cov={} vs fc0={}", first.cov, first_cov, enoki::slice(first.cov, 0));
+            // spdlog::info("second_cov={}", second_cov);
+            MatrixExpr cov_sum = first_cov + second_cov;
+            MatrixExpr cov_sum_sqrt;
             enoki::mask_t<ScalarExpr> is_psd;
             linalg::cholesky(cov_sum, cov_sum_sqrt, is_psd);
-            auto inv_cov_sum_sqrt = linalg::inverse_lower_tri(cov_sum_sqrt);
+            if(!enoki::all(is_psd)) {
+                // spdlog::info("second_cov_original={}", second_cov_original);
+                auto embedded_local = first_ts.coordinate_system.to * second_mean_embedded;
+                std::cerr << fmt::format("is_psd={}, second_mean_embedded={}, embedded_local={}, J_to={}\n", is_psd, second_mean_embedded, embedded_local, J);
+                std::cerr << fmt::format("second_cov={}\n", second_cov);
+                // spdlog::info("cov_sum={}", cov_sum);
+            }
+            MatrixExpr inv_cov_sum_sqrt = linalg::inverse_lower_tri(cov_sum_sqrt);
+            // spdlog::info("cov_sum_sqrt={}", cov_sum_sqrt);
+            // spdlog::info("inv_cov_sum_sqrt={}", inv_cov_sum_sqrt);
 
-            auto first_cov_premult = inv_cov_sum_sqrt * first_cov;
-            auto second_cov_premult = inv_cov_sum_sqrt * second_cov;
-            spdlog::info("second_cov_premult={}", second_cov_premult);
+            MatrixExpr first_cov_premult = inv_cov_sum_sqrt * first_cov;
+            MatrixExpr second_cov_premult = inv_cov_sum_sqrt * second_cov;
+            // spdlog::info("first_cov_premult={}", first_cov_premult);
+            // spdlog::info("second_cov_premult={}", second_cov_premult);
 
             auto first_mean_premult = inv_cov_sum_sqrt * first_mean; // == 0
             auto second_mean_premult = inv_cov_sum_sqrt * second_mean;
-            spdlog::info("second_mean_premult={}", second_mean_premult);
+            // spdlog::info("first_mean_premult={}", first_mean_premult);
+            // spdlog::info("second_mean_premult={}", second_mean_premult);
 
-            auto new_cov_tangent = linalg::transpose(first_cov_premult) * second_cov_premult;
+            MatrixExpr new_cov_tangent = linalg::transpose(first_cov_premult) * second_cov_premult;
             auto new_mean_tangent =
                 linalg::transpose(second_cov_premult) * first_mean_premult + // == 0
                 linalg::transpose(first_cov_premult) * second_mean_premult;
-            spdlog::info("new_mean_tangent={}", new_mean_tangent);
+            // spdlog::info("new_mean_tangent={}", new_mean_tangent);
 
             auto [new_mean, from_jacobian] = first_ts.from_jacobian(new_mean_tangent);
-            auto product_ts = enoki::packet(result.tangent_space, product_i);
+            auto&& product_ts = enoki::slice(result.tangent_space, product_i);
             product_ts.set_mean(new_mean);
             auto to_center_jacobian = product_ts.to_center_jacobian();
             J = to_center_jacobian * from_jacobian;
-            spdlog::info("J={}", J);
+            // spdlog::info("new_mean={}", to_center_jacobian);
+            // spdlog::info("to_center_J={}", to_center_jacobian);
+            // spdlog::info("from_J={}", from_jacobian);
+            // spdlog::info("J_from={}", J);
 
             auto new_cov = J * new_cov_tangent * linalg::transpose(J);
-            spdlog::info("new_cov={}", new_cov);
+            // spdlog::info("new_cov={}", new_cov);
 
-            enoki::packet(result.cov, product_i) = new_cov;
+            enoki::slice(result.cov, product_i) = new_cov;
 
-            auto inv_cov_sqrt_det = 1.f / enoki::hprod(enoki::diag(cov_sum_sqrt));
+            ScalarExpr cov_det = enoki::hprod(enoki::diag(cov_sum_sqrt));
+            ScalarExpr inv_cov_sqrt_det = 1.f / cov_det;
             auto standardized = sdmm::linalg::solve(cov_sum_sqrt, second_mean);
             auto squared_norm = enoki::squared_norm(standardized);
-            auto new_weight = 
+            ScalarExpr first_weight = enoki::slice(first.weight.pmf, first_i);
+            ScalarS second_weight = enoki::slice(second.weight.pmf, second_i);
+            ScalarExpr new_weight = 
                 first_weight *
                 second_weight * 
                 inv_cov_sqrt_det *
@@ -389,11 +411,136 @@ auto product(SDMM& first, SDMM& second, SDMM& result) {
                 gaussian_normalization<ScalarS, SDMM::CovSize> *
                 enoki::exp(ScalarS(-0.5) * squared_norm);
 
-            enoki::packet(result.weight.pmf, product_i) = new_weight;
+            enoki::slice(result.weight.pmf, product_i) = enoki::select(
+                cov_det == 0, // dot < 0
+                0,
+                new_weight
+            );
         }
     }
-    result.prepare();
+    return sdmm::prepare_vectorized(result);
 }
+
+// template<
+//     typename SDMM,
+//     std::enable_if_t<
+//         sdmm::embedded_t<SDMM>::Size != sdmm::tangent_t<SDMM>::Size &&
+//         sdmm::embedded_t<SDMM>::Size == 3,
+//         int
+//     > = 0
+// >
+// auto product(SDMM& first, SDMM& second, SDMM& result) {
+//     // TODO: implement single lobe selection from learned BSDF
+//     using ScalarExpr = enoki::expr_t<decltype(enoki::packet(first.weight.pmf, 0))>;
+//     using MatrixExpr = enoki::expr_t<decltype(enoki::packet(first.cov, 0))>;
+//     using ScalarS = typename SDMM::ScalarS;
+//     using EmbeddedS = sdmm::embedded_s_t<SDMM>;
+//     using TangentS = sdmm::tangent_s_t<SDMM>;
+//     using MatrixS = sdmm::matrix_s_t<SDMM>;
+//     size_t first_size = enoki::slices(first);
+//     size_t second_size = enoki::slices(second);
+//     size_t product_size = first_size * second_size;
+//     if(enoki::slices(result) != product_size) {
+//         enoki::set_slices(result, product_size);
+//     }
+// 
+//     size_t first_packets = enoki::packets(first);
+//     size_t product_packets = enoki::packets(result);
+// 
+//     bool use_jacobian_correction = false;
+// 
+//     for(size_t first_i = 0; first_i < first_packets; ++first_i) {
+//         for(size_t second_i = 0; second_i < second_size; ++second_i) {
+//             size_t product_i = first_i + second_i * first_packets;
+// 
+//             MatrixExpr first_cov = enoki::packet(first.cov, first_i);
+//             MatrixS second_cov_original = enoki::slice(second.cov, second_i);
+// 
+//             auto&& first_ts = enoki::packet(first.tangent_space, first_i);
+//             auto&& second_ts = enoki::slice(second.tangent_space, second_i);
+// 
+//             auto dot = enoki::dot(first_ts.mean, second_ts.mean);
+// 
+//             TangentS first_mean = enoki::zero<TangentS>();
+//             EmbeddedS second_mean_embedded = second_ts.mean;
+//             auto from_center_jacobian = second_ts.from_center_jacobian();
+//             ScalarExpr inv_jacobian;
+//             auto [second_mean, to_jacobian] = first_ts.to_jacobian(second_mean_embedded, inv_jacobian);
+//             MatrixExpr J = to_jacobian * from_center_jacobian;
+// 
+//             // spdlog::info("J_to={}", J);
+//             MatrixExpr second_cov = J * second_cov_original * linalg::transpose(J);
+//             // spdlog::info("fc={}, first_cov={} vs fc0={}", first.cov, first_cov, enoki::slice(first.cov, 0));
+//             // spdlog::info("second_cov={}", second_cov);
+//             MatrixExpr cov_sum = first_cov + second_cov;
+//             MatrixExpr cov_sum_sqrt;
+//             enoki::mask_t<ScalarExpr> is_psd;
+//             linalg::cholesky(cov_sum, cov_sum_sqrt, is_psd);
+//             if(!enoki::all(is_psd)) {
+//                 // spdlog::info("second_cov_original={}", second_cov_original);
+//                 auto embedded_local = first_ts.coordinate_system.to * second_mean_embedded;
+//                 std::cerr << fmt::format("is_psd={}, embedded_local={}, J_to={}\n", is_psd, embedded_local, J);
+//                 std::cerr << fmt::format("second_cov={}\n", second_cov);
+//                 // spdlog::info("cov_sum={}", cov_sum);
+//             }
+//             MatrixExpr inv_cov_sum_sqrt = linalg::inverse_lower_tri(cov_sum_sqrt);
+//             // spdlog::info("cov_sum_sqrt={}", cov_sum_sqrt);
+//             // spdlog::info("inv_cov_sum_sqrt={}", inv_cov_sum_sqrt);
+// 
+//             MatrixExpr first_cov_premult = inv_cov_sum_sqrt * first_cov;
+//             MatrixExpr second_cov_premult = inv_cov_sum_sqrt * second_cov;
+//             // spdlog::info("first_cov_premult={}", first_cov_premult);
+//             // spdlog::info("second_cov_premult={}", second_cov_premult);
+// 
+//             auto first_mean_premult = inv_cov_sum_sqrt * first_mean; // == 0
+//             auto second_mean_premult = inv_cov_sum_sqrt * second_mean;
+//             // spdlog::info("first_mean_premult={}", first_mean_premult);
+//             // spdlog::info("second_mean_premult={}", second_mean_premult);
+// 
+//             MatrixExpr new_cov_tangent = linalg::transpose(first_cov_premult) * second_cov_premult;
+//             auto new_mean_tangent =
+//                 linalg::transpose(second_cov_premult) * first_mean_premult + // == 0
+//                 linalg::transpose(first_cov_premult) * second_mean_premult;
+//             // spdlog::info("new_mean_tangent={}", new_mean_tangent);
+// 
+//             auto [new_mean, from_jacobian] = first_ts.from_jacobian(new_mean_tangent);
+//             auto&& product_ts = enoki::packet(result.tangent_space, product_i);
+//             product_ts.set_mean(new_mean);
+//             auto to_center_jacobian = product_ts.to_center_jacobian();
+//             J = to_center_jacobian * from_jacobian;
+//             // spdlog::info("new_mean={}", to_center_jacobian);
+//             // spdlog::info("to_center_J={}", to_center_jacobian);
+//             // spdlog::info("from_J={}", from_jacobian);
+//             // spdlog::info("J_from={}", J);
+// 
+//             auto new_cov = J * new_cov_tangent * linalg::transpose(J);
+//             // spdlog::info("new_cov={}", new_cov);
+// 
+//             enoki::packet(result.cov, product_i) = new_cov;
+// 
+//             ScalarExpr cov_det = enoki::hprod(enoki::diag(cov_sum_sqrt));
+//             ScalarExpr inv_cov_sqrt_det = 1.f / cov_det;
+//             auto standardized = sdmm::linalg::solve(cov_sum_sqrt, second_mean);
+//             auto squared_norm = enoki::squared_norm(standardized);
+//             ScalarExpr first_weight = enoki::packet(first.weight.pmf, first_i);
+//             ScalarS second_weight = enoki::slice(second.weight.pmf, second_i);
+//             ScalarExpr new_weight = 
+//                 first_weight *
+//                 second_weight * 
+//                 inv_cov_sqrt_det *
+//                 inv_jacobian *
+//                 gaussian_normalization<ScalarS, SDMM::CovSize>;
+//                 // enoki::exp(ScalarS(-0.5) * squared_norm);
+// 
+//             enoki::packet(result.weight.pmf, product_i) = enoki::select(
+//                 cov_det == 0, // dot < 0
+//                 0,
+//                 new_weight
+//             );
+//         }
+//     }
+//     return result.prepare();
+// }
 
 template<
     typename SDMM,
@@ -465,3 +612,4 @@ ENOKI_STRUCT_SUPPORT(
     inv_cov_sqrt_det,
     cov_is_psd
 );
+

@@ -116,7 +116,7 @@ struct DirectionalTangentSpace {
         const ScalarExpr sin_angle_sqr = 1 - cos_angle * cos_angle;
         const ScalarExpr sin_angle = enoki::safe_sqrt(sin_angle_sqr);
         const ScalarExpr rcp_sinc_angle = enoki::select(
-            sin_angle < 1e-4,
+            sin_angle < 1e-2,
             ScalarExpr(1),
             angle / sin_angle
         );
@@ -128,7 +128,11 @@ struct DirectionalTangentSpace {
         jacobian(0, 1) = enoki::zero<ScalarExpr>(enoki::slices(rcp_sinc_angle));
         jacobian(1, 0) = enoki::zero<ScalarExpr>(enoki::slices(rcp_sinc_angle));
 
-        ScalarExpr inv_sin_angle_sqr = 1 / sin_angle_sqr;
+        ScalarExpr inv_sin_angle_sqr = enoki::select(
+            sin_angle < 1e-2,
+            0,
+            1 / sin_angle_sqr
+        );
         ScalarExpr temp_expr = (cos_angle * rcp_sinc_angle - 1) * inv_sin_angle_sqr;
         jacobian(0, 2) = embedded_local.coeff(0) * temp_expr;
         jacobian(1, 2) = embedded_local.coeff(1) * temp_expr;
@@ -156,13 +160,16 @@ struct DirectionalTangentSpace {
         const ScalarExpr length = enoki::sqrt(length_sqr);
         auto [sin_angle, cos_angle] = enoki::sincos(length);
         const ScalarExpr sinc_angle = enoki::select(
-            sin_angle < 1e-4,
+            sin_angle < 1e-2,
             ScalarExpr(1),
             sin_angle / length
         );
 
-        ScalarExpr cos_minus_sinc_over_length_sqr =
-            (cos_angle - sinc_angle) / length_sqr;
+        ScalarExpr cos_minus_sinc_over_length_sqr = enoki::select(
+            sin_angle < 1e-2,
+            0,
+            (cos_angle - sinc_angle) / length_sqr
+        );
         jacobian(0, 0) = sinc_angle + tangent.coeff(0) * tangent.coeff(0) * cos_minus_sinc_over_length_sqr;
         jacobian(1, 1) = sinc_angle + tangent.coeff(1) * tangent.coeff(1) * cos_minus_sinc_over_length_sqr;
 
@@ -170,8 +177,12 @@ struct DirectionalTangentSpace {
         jacobian(0, 1) = off_diagonal;
         jacobian(1, 0) = off_diagonal;
 
-        jacobian(2, 0) = -tangent.coeff(0) * sinc_angle;
-        jacobian(2, 1) = -tangent.coeff(1) * sinc_angle;
+        jacobian(2, 0) = enoki::select(
+            sin_angle < 1e-2, 0, -tangent.coeff(0) * sinc_angle
+        );
+        jacobian(2, 1) = enoki::select(
+            sin_angle < 1e-2, 0, -tangent.coeff(1) * sinc_angle
+        );
 
         jacobian = coordinate_system.from * jacobian;
 
@@ -185,12 +196,7 @@ struct DirectionalTangentSpace {
     }
 
     auto set_mean(const Embedded& mean_) -> void {
-        mean = mean_;
-        coordinate_system.prepare(mean);
-    }
-
-    auto set_mean(Embedded&& mean_) -> void {
-        mean = std::move(mean_);
+        mean = enoki::normalize(mean_);
         coordinate_system.prepare(mean);
     }
 

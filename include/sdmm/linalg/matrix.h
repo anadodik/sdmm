@@ -177,114 +177,116 @@ ENOKI_INLINE T identity(size_t size = 1) {
 
 }
 
-namespace enoki {
-    template <typename T, size_t Rows, size_t Cols>
-    struct struct_support<sdmm::linalg::Matrix<T, Rows, Cols>,
-                          enable_if_static_array_t<sdmm::linalg::Matrix<T, Rows, Cols>>> {
-        static constexpr bool IsDynamic = enoki::is_dynamic_v<T>;
-        using Dynamic = sdmm::linalg::Matrix<enoki::make_dynamic_t<T>, Rows, Cols>;
-        using Value = sdmm::linalg::Matrix<T, Rows, Cols>;
-        using Column = column_t<Value>;
+NAMESPACE_BEGIN(enoki)
 
-        static ENOKI_INLINE size_t slices(const Value &value) {
-            return enoki::slices(value.coeff(0, 0));
-        }
+template <typename T, size_t Rows, size_t Cols>
+struct struct_support<sdmm::linalg::Matrix<T, Rows, Cols>,
+                      enable_if_static_array_t<sdmm::linalg::Matrix<T, Rows, Cols>>> {
+    static constexpr bool IsDynamic = enoki::is_dynamic_v<T>;
+    using Dynamic = sdmm::linalg::Matrix<enoki::make_dynamic_t<T>, Rows, Cols>;
+    using Value = sdmm::linalg::Matrix<T, Rows, Cols>;
+    using Column = column_t<Value>;
 
-        static ENOKI_INLINE size_t packets(const Value &value) {
-            return enoki::packets(value.coeff(0, 0));
-        }
+    static ENOKI_INLINE size_t slices(const Value &value) {
+        return enoki::slices(value.coeff(0, 0));
+    }
 
-        static ENOKI_INLINE void set_slices(Value &value, size_t size) {
-            for (size_t i = 0; i < Cols; ++i)
-                enoki::set_slices(value.coeff(i), size);
-        }
+    static ENOKI_INLINE size_t packets(const Value &value) {
+        return enoki::packets(value.coeff(0, 0));
+    }
 
-        template <typename T2>
-        static ENOKI_INLINE auto packet(T2&& value, size_t i) {
-            return packet(value, i, std::make_index_sequence<Cols>());
-        }
+    static ENOKI_INLINE void set_slices(Value &value, size_t size) {
+        for (size_t i = 0; i < Cols; ++i)
+            enoki::set_slices(value.coeff(i), size);
+    }
 
-        template <typename T2>
-        static ENOKI_INLINE auto slice(T2&& value, size_t i) {
-            return slice(value, i, std::make_index_sequence<Cols>());
-        }
+    template <typename T2>
+    static ENOKI_INLINE auto packet(T2&& value, size_t i) {
+        return packet(value, i, std::make_index_sequence<Cols>());
+    }
 
-        template <typename T2>
-        static ENOKI_INLINE auto slice_ptr(T2&& value, size_t i) {
-            return slice_ptr(value, i, std::make_index_sequence<Cols>());
-        }
+    template <typename T2>
+    static ENOKI_INLINE auto slice(T2&& value, size_t i) {
+        return slice(value, i, std::make_index_sequence<Cols>());
+    }
 
-        template <typename T2>
-        static ENOKI_INLINE auto ref_wrap(T2&& value) {
-            return ref_wrap(value, std::make_index_sequence<Cols>());
-        }
+    template <typename T2>
+    static ENOKI_INLINE auto slice_ptr(T2&& value, size_t i) {
+        return slice_ptr(value, i, std::make_index_sequence<Cols>());
+    }
 
-        template <typename T2>
-        static ENOKI_INLINE auto detach(T2&& value) {
-            return detach(value, std::make_index_sequence<Cols>());
-        }
+    template <typename T2>
+    static ENOKI_INLINE auto ref_wrap(T2&& value) {
+        return ref_wrap(value, std::make_index_sequence<Cols>());
+    }
 
-        template <typename T2>
-        static ENOKI_INLINE auto gradient(T2&& value) {
-            return gradient(value, std::make_index_sequence<Cols>());
-        }
+    template <typename T2>
+    static ENOKI_INLINE auto detach(T2&& value) {
+        return detach(value, std::make_index_sequence<Cols>());
+    }
 
-        static ENOKI_INLINE Value zero(size_t size) {
-            return Value::zero_(size);
-        }
+    template <typename T2>
+    static ENOKI_INLINE auto gradient(T2&& value) {
+        return gradient(value, std::make_index_sequence<Cols>());
+    }
 
-        static ENOKI_INLINE Value empty(size_t size) {
-            return Value::empty_(size);
-        }
+    static ENOKI_INLINE Value zero(size_t size) {
+        return Value::zero_(size);
+    }
 
-        template <typename T2, typename Mask,
-                  enable_if_t<array_size<T2>::value == array_size<Mask>::value> = 0>
-        static ENOKI_INLINE auto masked(T2 &value, const Mask &mask) {
-            return detail::MaskedArray<T2>{ value, mask_t<T2>(mask) };
-        }
+    static ENOKI_INLINE Value empty(size_t size) {
+        return Value::empty_(size);
+    }
 
-        template <typename T2, typename Mask,
-                  enable_if_t<array_size<T2>::value != array_size<Mask>::value> = 0>
-        static ENOKI_INLINE auto masked(T2 &value, const Mask &mask) {
-            using Arr = Array<Array<T, Rows>, Cols>;
-            return enoki::masked((Arr&) value, mask_t<Arr>(mask));
-        }
+    template <typename T2, typename Mask,
+              enable_if_t<array_size<T2>::value == array_size<Mask>::value> = 0>
+    static ENOKI_INLINE auto masked(T2 &value, const Mask &mask) {
+        return detail::MaskedArray<T2>{ value, mask_t<T2>(mask) };
+    }
 
-    private:
-        template <typename T2, size_t... Index>
-        static ENOKI_INLINE auto packet(T2&& value, size_t i, std::index_sequence<Index...>) {
-            return sdmm::linalg::Matrix<decltype(enoki::packet(value.coeff(0, 0), i)), Rows, Cols>(
-                enoki::packet(value.coeff(Index), i)...);
-        }
+    template <typename T2, typename Mask,
+              enable_if_t<array_size<T2>::value != array_size<Mask>::value> = 0>
+    static ENOKI_INLINE auto masked(T2 &value, const Mask &mask) {
+        using Arr = Array<Array<T, Rows>, Cols>;
+        return enoki::masked((Arr&) value, mask_t<Arr>(mask));
+    }
 
-        template <typename T2, size_t... Index>
-        static ENOKI_INLINE auto slice(T2&& value, size_t i, std::index_sequence<Index...>) {
-            return sdmm::linalg::Matrix<decltype(enoki::slice(value.coeff(0, 0), i)), Rows, Cols>(
-                enoki::slice(value.coeff(Index), i)...);
-        }
+private:
+    template <typename T2, size_t... Index>
+    static ENOKI_INLINE auto packet(T2&& value, size_t i, std::index_sequence<Index...>) {
+        return sdmm::linalg::Matrix<decltype(enoki::packet(value.coeff(0, 0), i)), Rows, Cols>(
+            enoki::packet(value.coeff(Index), i)...);
+    }
 
-        template <typename T2, size_t... Index>
-        static ENOKI_INLINE auto slice_ptr(T2&& value, size_t i, std::index_sequence<Index...>) {
-            return sdmm::linalg::Matrix<decltype(enoki::slice_ptr(value.coeff(0, 0), i)), Rows, Cols>(
-                enoki::slice_ptr(value.coeff(Index), i)...);
-        }
+    template <typename T2, size_t... Index>
+    static ENOKI_INLINE auto slice(T2&& value, size_t i, std::index_sequence<Index...>) {
+        return sdmm::linalg::Matrix<decltype(enoki::slice(value.coeff(0, 0), i)), Rows, Cols>(
+            enoki::slice(value.coeff(Index), i)...);
+    }
 
-        template <typename T2, size_t... Index>
-        static ENOKI_INLINE auto ref_wrap(T2&& value, std::index_sequence<Index...>) {
-            return sdmm::linalg::Matrix<decltype(enoki::ref_wrap(value.coeff(0, 0))), Rows, Cols>(
-                enoki::ref_wrap(value.coeff(Index))...);
-        }
+    template <typename T2, size_t... Index>
+    static ENOKI_INLINE auto slice_ptr(T2&& value, size_t i, std::index_sequence<Index...>) {
+        return sdmm::linalg::Matrix<decltype(enoki::slice_ptr(value.coeff(0, 0), i)), Rows, Cols>(
+            enoki::slice_ptr(value.coeff(Index), i)...);
+    }
 
-        template <typename T2, size_t... Index>
-        static ENOKI_INLINE auto detach(T2&& value, std::index_sequence<Index...>) {
-            return sdmm::linalg::Matrix<decltype(enoki::detach(value.coeff(0, 0))), Rows, Cols>(
-                enoki::detach(value.coeff(Index))...);
-        }
+    template <typename T2, size_t... Index>
+    static ENOKI_INLINE auto ref_wrap(T2&& value, std::index_sequence<Index...>) {
+        return sdmm::linalg::Matrix<decltype(enoki::ref_wrap(value.coeff(0, 0))), Rows, Cols>(
+            enoki::ref_wrap(value.coeff(Index))...);
+    }
 
-        template <typename T2, size_t... Index>
-        static ENOKI_INLINE auto gradient(T2&& value, std::index_sequence<Index...>) {
-            return sdmm::linalg::Matrix<decltype(enoki::gradient(value.coeff(0, 0))), Rows, Cols>(
-                enoki::gradient(value.coeff(Index))...);
-        }
-    };
-}
+    template <typename T2, size_t... Index>
+    static ENOKI_INLINE auto detach(T2&& value, std::index_sequence<Index...>) {
+        return sdmm::linalg::Matrix<decltype(enoki::detach(value.coeff(0, 0))), Rows, Cols>(
+            enoki::detach(value.coeff(Index))...);
+    }
+
+    template <typename T2, size_t... Index>
+    static ENOKI_INLINE auto gradient(T2&& value, std::index_sequence<Index...>) {
+        return sdmm::linalg::Matrix<decltype(enoki::gradient(value.coeff(0, 0))), Rows, Cols>(
+            enoki::gradient(value.coeff(Index))...);
+    }
+};
+
+NAMESPACE_END(enoki)
