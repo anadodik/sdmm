@@ -1,4 +1,5 @@
 #include <enoki/python.h>
+#include <enoki/random.h>
 
 #include <fmt/format.h>
 

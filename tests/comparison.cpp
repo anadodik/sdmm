@@ -1,13 +1,17 @@
 #include <doctest/doctest.h>
 
 #include <enoki/array.h>
-#include <enoki/matrix.h>
 #include <enoki/dynamic.h>
+#include <enoki/random.h>
 
 #include "sdmm/distributions/categorical.h"
 #include "sdmm/distributions/sdmm.h"
 #include "sdmm/distributions/sdmm_conditioner.h"
 #include "sdmm/opt/em.h"
+
+#include "sdmm/spaces/euclidian.h"
+#include "sdmm/spaces/directional.h"
+#include "sdmm/spaces/spatio_directional.h"
 
 #include "utils.h"
 

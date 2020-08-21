@@ -8,6 +8,10 @@
 #include "sdmm/distributions/sdmm.h"
 #include "sdmm/distributions/sdmm_conditioner.h"
 
+#include "sdmm/spaces/euclidian.h"
+#include "sdmm/spaces/directional.h"
+#include "sdmm/spaces/spatio_directional.h"
+
 using Scalar = float;
 
 template<typename Vector, typename RNG>

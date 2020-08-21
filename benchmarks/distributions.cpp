@@ -6,6 +6,10 @@
 #include "sdmm/distributions/sdmm.h"
 #include "sdmm/distributions/sdmm_conditioner.h"
 
+#include "sdmm/spaces/euclidian.h"
+#include "sdmm/spaces/directional.h"
+#include "sdmm/spaces/spatio_directional.h"
+
 #if COMPARISON == 1
 #include "jmm/mixture_model.h"
 #endif
