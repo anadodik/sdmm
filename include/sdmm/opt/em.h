@@ -6,10 +6,10 @@
 #include "sdmm/distributions/sdmm.h"
 #include "sdmm/opt/data.h"
 
-#define WARN_ON_FAIL(EXPR) \
+#define WARN_ON_FAIL(EXPR, OUT) \
     do { \
         if(!EXPR) { \
-            spdlog::warn(#EXPR); \
+            spdlog::warn(#EXPR "={}", OUT); \
         } \
     } while(0)
 
@@ -116,8 +116,6 @@ struct EM {
         const Matrix& cov_prior
     ) -> void;
 
-    auto step(SDMM_& sdmm, Data<SDMM_>& data) -> void;
-
     auto compute_stats_model_parallel(
         SDMM& distribution, Data<SDMM>& data
     ) -> void;
@@ -177,6 +175,11 @@ auto EM<SDMM_>::set_priors(
 
 template<typename SDMM_>
 auto em_step(SDMM_& distribution, EM<SDMM_>& em, Data<SDMM_>& data) -> void {
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(distribution.weight.pmf)), distribution.weight.pmf);
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(em.stats_normalized.weight)), em.stats_normalized.weight);
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(em.batch_stats.weight)), em.batch_stats.weight);
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(em.stats.weight)), em.stats.weight);
+
     em.compute_stats_model_parallel(distribution, data);
     // spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
     em.interpolate_stats();
@@ -201,21 +204,6 @@ auto em_step(SDMM_& distribution, EM<SDMM_>& em, Data<SDMM_>& data) -> void {
 }
 
 template<typename SDMM_>
-auto EM<SDMM_>::step(SDMM_& distribution, Data<SDMM_>& data) -> void {
-    compute_stats_model_parallel(distribution, data);
-    interpolate_stats();
-    bool success_normalized = normalize_stats(data);
-    if(!success_normalized) {
-        return;
-    }
-    assert(success_normalized);
-    update_model(distribution, *this);
-    bool success_prepare = sdmm::prepare_vectorized(distribution);
-    assert(success_prepare);
-    ++iterations_run;
-}
-
-template<typename SDMM_>
 auto EM<SDMM_>::compute_stats_model_parallel(
     SDMM& distribution, Data<SDMM_>& data
 ) -> void {
@@ -226,9 +214,15 @@ auto EM<SDMM_>::compute_stats_model_parallel(
     // );
     for(size_t slice_i = 0; slice_i < data.size; ++slice_i) {
         auto data_slice = enoki::slice(data, slice_i);
-        if(std::isnan(data_slice.weight) || data_slice.weight < 1e-8) {
+        if(!sdmm::is_valid_sample(data_slice.weight)) {
             continue;
         }
+
+        sdmm::embedded_s_t<SDMM> point = data_slice.point;
+        // auto length = enoki::norm(enoki::tail<3>(point));
+        // if(enoki::any(enoki::abs(length - 1) >= 1e-5)) {
+        //     std::cerr << fmt::format("length=({}, {})\n", data_slice.point, data_slice.weight);
+        // }
         // spdlog::info("slice_{} weight={}", slice_i, data_slice.weight);
         // spdlog::info("slice_{} point={}", slice_i, data_slice.point);
         enoki::vectorize_safe(
@@ -250,10 +244,11 @@ auto EM<SDMM_>::compute_stats_model_parallel(
         if(data_slice.heuristic_pdf != -1) {
             posterior_sum = 0.5 * posterior_sum + 0.5 * data_slice.heuristic_pdf;
         }
-        if(posterior_sum == 0) {
+        if(posterior_sum == 0 || !std::isfinite(1.f / posterior_sum)) {
             continue;
         }
-        auto rcp_posterior = 1 / posterior_sum;
+
+        auto rcp_posterior = 1.f / posterior_sum;
         if(data_slice.heuristic_pdf != -1) {
             enoki::vectorize(
                 [](auto&& value) { value *= ScalarS(0.5); },
@@ -300,7 +295,10 @@ template<typename SDMM_>
     total_weight = (1 - eta) * total_weight + eta * weight_sum;
     ScalarS rcp_weight_sum = 1 / total_weight;
     if(!enoki::isfinite(rcp_weight_sum)) {
-        spdlog::warn("weight_sum == 0");
+        spdlog::warn("!std::isfinite(weight_sum)");
+        return false;
+    } else if(total_weight == 0) {
+        spdlog::warn("total_weight = 0");
         return false;
     }
     enoki::vectorize_safe(
@@ -332,29 +330,55 @@ auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
     ScalarExpr rcp_cov_weight =
         1.f / (cov_prior_strength_decayed + em.stats_normalized.weight);
 
-    // Following should always be true:
-    WARN_ON_FAIL(enoki::all(enoki::isfinite(em.stats_normalized.weight)));
-    WARN_ON_FAIL(enoki::all(enoki::isfinite(rcp_cov_weight)));
-    WARN_ON_FAIL(enoki::all(enoki::isfinite(distribution.weight.pmf)));
-    WARN_ON_FAIL(enoki::any(distribution.weight.pmf > 0));
-
     auto non_zero_weights = distribution.weight.pmf > 0;
-    auto finite_weights = enoki::isfinite(rcp_weight);
+    auto finite_rcp_weights = enoki::isfinite(rcp_weight);
 
-    if(!enoki::all(finite_weights)) {
-        WARN_ON_FAIL(enoki::all(finite_weights));
-        // return;
-    }
+    // Following should always be true:
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(em.stats_normalized.weight)), em.stats_normalized.weight);
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(em.batch_stats.weight)), em.batch_stats.weight);
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(em.stats.weight)), em.stats.weight);
+    WARN_ON_FAIL((em.total_weight > 0), em.total_weight);
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(rcp_cov_weight)), rcp_cov_weight);
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(distribution.weight.pmf)), distribution.weight.pmf);
+    WARN_ON_FAIL(enoki::any(distribution.weight.pmf > 0), distribution.weight.pmf);
+    WARN_ON_FAIL(enoki::any(non_zero_weights), non_zero_weights);
+    WARN_ON_FAIL(enoki::all(finite_rcp_weights), rcp_weight);
 
     // TODO: need to check whether number * rcp_cov_weight overflows or is nan!
     em.updated_model.weight = enoki::select(
         non_zero_weights,
-        em.stats_normalized.weight + weight_prior_decayed,
+        enoki::select(
+            finite_rcp_weights,
+            em.stats_normalized.weight + weight_prior_decayed,
+            weight_prior_decayed
+        ),
         0
     );
 
+    if(!enoki::all(enoki::isfinite(em.updated_model.weight))) {
+        std::cout << fmt::format(
+            "em.updated_model.weight={}\n"
+
+            "distribution=\n"
+
+            "weight={}\n"
+            // "to={}\n"
+            "mean={}\n"
+            "cond_cov={}\n"
+            "cov_sqrt={}\n"
+            "",
+            em.updated_model.weight,
+
+            distribution.weight.pmf,
+            // distribution.tangent_space.coordinate_system.to,
+            distribution.tangent_space.mean,
+            distribution.cov,
+            distribution.cov_sqrt
+        );
+    }
+
     em.updated_model.mean = enoki::select(
-        non_zero_weights && finite_weights,
+        non_zero_weights && finite_rcp_weights,
         em.stats_normalized.mean * rcp_weight,
         0
     );
@@ -363,9 +387,26 @@ auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
             sdmm::linalg::outer(em.stats_normalized.mean) * rcp_weight;
     MatrixExpr cov_unnormalized = 
         em.stats_normalized.cov - mean_subtraction + cov_prior_decayed;
+
+    MatrixExpr cov_normalized = cov_unnormalized * rcp_cov_weight;
+    auto finite_mat = [](auto&& mat) {
+        for(size_t i = 0; i < std::decay_t<decltype(mat)>::Rows; ++i) {
+            for(size_t j = 0; j < std::decay_t<decltype(mat)>::Cols; ++j) {
+                bool isfinite = enoki::all(enoki::isfinite(mat(i, j)));
+                if(!isfinite) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    };
+
+    if(!finite_mat(cov_normalized)) {
+        spdlog::warn("!isfinite(cov)={}=\n{}\n*{}\n", cov_normalized, cov_unnormalized, rcp_cov_weight);
+    }
     em.updated_model.cov = enoki::select(
-        non_zero_weights && finite_weights,
-        cov_unnormalized * rcp_cov_weight + em.depth_prior,
+        non_zero_weights && finite_rcp_weights,
+        cov_normalized + em.depth_prior,
         distribution.cov
     );
     distribution.weight.pmf = em.updated_model.weight;
@@ -377,12 +418,12 @@ auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
 
     em.stats_normalized.cov -= linalg::outer(em.stats_normalized.mean) * rcp_weight;
     em.stats.cov = enoki::select(
-        non_zero_weights && finite_weights,
+        non_zero_weights && finite_rcp_weights,
         em.stats_normalized.cov * em.total_weight,
         em.stats.cov
     );
     em.stats.mean = enoki::select(
-        non_zero_weights && finite_weights,
+        non_zero_weights && finite_rcp_weights,
         0,
         em.stats.mean
     );

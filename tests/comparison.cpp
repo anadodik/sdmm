@@ -279,7 +279,7 @@ TEST_CASE("sampling/pdf comparison") {
 
         // TODO: emIt
         for(size_t it = 0; it < iterations; ++it) {
-            em.step(distribution, data);
+            sdmm::em_step(distribution, em, data);
             // spdlog::info("weights({})={}", it, distribution.weight.pmf);
             // spdlog::info("means({})={}", it, distribution.tangent_space.mean);
             // spdlog::info("cov_sqrts({})={}", it, distribution.inv_cov_sqrt_det);

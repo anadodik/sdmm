@@ -9,6 +9,7 @@
 
 #include "sdmm/distributions/categorical.h"
 #include "sdmm/distributions/sdmm.h"
+#include "sdmm/distributions/sdmm_conditioner.h"
 
 #include "sdmm/opt/em.h"
 
@@ -51,10 +52,17 @@ auto add_directional(py::module& m) {
 	using TangentS = sdmm::Vector<Scalar, 2>;
     using TangentSpace = sdmm::DirectionalTangentSpace<Embedded, Tangent>;
 
+    using Matrix = typename TangentSpace::Matrix;
+
     py::class_<TangentSpace>(m, name.c_str())
         .def(py::init<>())
         .def_readwrite("mean", &TangentSpace::mean)
+        .def("get_to", [](TangentSpace& ts) { return ts.coordinate_system.to; })
+        .def("get_from", [](TangentSpace& ts) { return ts.coordinate_system.from; })
+        .def("set_to", [](TangentSpace& ts, Matrix& m) { ts.coordinate_system.to = m; })
+        .def("set_from", [](TangentSpace& ts, Matrix& m) { ts.coordinate_system.from = m; })
         .def("set_mean", py::overload_cast<const Embedded&>(&TangentSpace::set_mean), "mean"_a)
+        .def("rotate_to_wo", &TangentSpace::rotate_to_wo, "wi"_a)
         .def("to_tangent", &TangentSpace::template to<EmbeddedS>, "embedded"_a, "inv_jacobian"_a)
         .def("from_tangent", &TangentSpace::template from<TangentS>, "tangent"_a, "inv_jacobian"_a)
         .def("to_center_jacobian", &TangentSpace::to_center_jacobian)
@@ -203,30 +211,63 @@ auto add_mm(py::module& m, const std::string& name) {
 	;
 }
 
+template<typename Conditioner>
+auto add_conditioner(py::module& m, const std::string& name) {
+    using Joint = typename Conditioner::Joint;
+    using Conditional = typename Conditioner::Conditional;
+    using Point = typename Conditioner::MarginalEmbeddedS;
+
+    py::class_<Conditioner>(m, name.c_str())
+        .def(py::init<>())
+		.def("prepare", [](Conditioner& conditioner, Joint& joint) {
+            if(enoki::slices(conditioner) != enoki::slices(joint)) {
+                enoki::set_slices(conditioner, enoki::slices(joint));
+            }
+            sdmm::prepare(conditioner, joint); 
+        })
+		.def("condition", [](Conditioner& conditioner, Point& point) {
+            Conditional conditional;
+            enoki::set_slices(conditional, enoki::slices(conditioner));
+            sdmm::create_conditional(conditioner, point, conditional); 
+            return conditional;
+        })
+    ;
+}
+
 template<size_t Size>
 auto add_sdmm(py::module& dist_m, py::module& opt_m) {
 	constexpr static size_t JointSize = Size;
 	constexpr static size_t ConditionalSize = 2;
 	constexpr static size_t MarginalSize = Size - ConditionalSize;
 
-	using Embedded = sdmm::Vector<Value, Size + 1>;
-	using Tangent = sdmm::Vector<Value, Size>;
-	using EmbeddedS = sdmm::Vector<Scalar, Size + 1>;
-	using TangentS = sdmm::Vector<Scalar, Size>;
-    using TangentSpace = sdmm::SpatioDirectionalTangentSpace<Embedded, Tangent>;
+	using JointEmbedded = sdmm::Vector<Value, JointSize + 1>;
+	using JointTangent = sdmm::Vector<Value, JointSize>;
+    using JointTangentSpace = sdmm::SpatioDirectionalTangentSpace<JointEmbedded, JointTangent>;
+    using JointSDMM = sdmm::SDMM<sdmm::Matrix<Value, JointSize>, JointTangentSpace>;
 
-    using SDMM = sdmm::SDMM<
-        sdmm::Matrix<Value, JointSize>, TangentSpace
-    >;
+	using MarginalEmbedded = sdmm::Vector<Value, MarginalSize>;
+	using MarginalTangent = sdmm::Vector<Value, MarginalSize>;
+    using MarginalTangentSpace = sdmm::EuclidianTangentSpace<MarginalEmbedded, MarginalTangent>;
+    using MarginalSDMM = sdmm::SDMM<sdmm::Matrix<Value, MarginalSize>, MarginalTangentSpace>;
 
-    auto dist_name = fmt::format("SDMM{}", Size);
-	add_mm<SDMM>(dist_m, dist_name);
+	using ConditionalEmbedded = sdmm::Vector<Value, ConditionalSize + 1>;
+	using ConditionalTangent = sdmm::Vector<Value, ConditionalSize>;
+    using ConditionalTangentSpace = sdmm::DirectionalTangentSpace<ConditionalEmbedded, ConditionalTangent>;
+    using ConditionalSDMM = sdmm::SDMM<sdmm::Matrix<Value, ConditionalSize>, ConditionalTangentSpace>;
 
-    auto data_name = fmt::format("SDMMData{}", Size);
-	add_mm_data<SDMM>(opt_m, data_name);
+    using Conditioner = sdmm::SDMMConditioner<JointSDMM, MarginalSDMM, ConditionalSDMM>;
 
-    auto em_name = fmt::format("SDMMEM{}", Size);
-	add_mm_em<SDMM>(opt_m, em_name);
+    auto dist_name = fmt::format("SDMM{}", JointSize);
+	add_mm<JointSDMM>(dist_m, dist_name);
+
+    auto data_name = fmt::format("SDMMData{}", JointSize);
+	add_mm_data<JointSDMM>(opt_m, data_name);
+
+    auto em_name = fmt::format("SDMMEM{}", JointSize);
+	add_mm_em<JointSDMM>(opt_m, em_name);
+
+    auto conditioner_name = fmt::format("SDMMConditioner{}", Size);
+	add_conditioner<Conditioner>(dist_m, conditioner_name);
 }
 
 template<size_t Size>
@@ -303,7 +344,7 @@ PYBIND11_MODULE(pysdmm, m) {
 
 	auto opt_m = m.def_submodule("opt", "Optimizers for SDMM distributions.");
 
-    add_sdmm<3>(dist_m, opt_m);
+    // add_sdmm<3>(dist_m, opt_m);
     add_sdmm<4>(dist_m, opt_m);
     // add_sdmm<5>(dist_m, opt_m);
 

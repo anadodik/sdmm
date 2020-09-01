@@ -130,15 +130,16 @@ struct SDMM {
 
 template<typename SDMM>
 [[nodiscard]] inline auto prepare_vectorized(SDMM& distribution) {
+    typename SDMM::Mask cov_success;
     if constexpr(enoki::is_dynamic_v<SDMM>) {
-        enoki::vectorize(
+        cov_success = enoki::vectorize(
             VECTORIZE_WRAP_MEMBER(prepare_cov),
             distribution
         );
     } else {
         distribution.prepare_cov();
     }
-    return distribution.weight.prepare();
+    return distribution.weight.prepare() && enoki::all(cov_success);
 }
 
 template<typename Matrix_, typename TangentSpace_>
@@ -251,13 +252,30 @@ auto SDMM<Matrix_, TangentSpace_>::pdf_gaussian(
     ScalarExpr inv_jacobian;
     tangent = tangent_space.to(point, inv_jacobian);
     TangentExpr standardized = to_standard_normal(tangent);
-    // spdlog::info("tangent={}", tangent);
     ScalarExpr squared_norm = enoki::squared_norm(standardized);
     pdf =
         inv_cov_sqrt_det *
         inv_jacobian *
         gaussian_normalization<ScalarS, CovSize> *
         enoki::exp(ScalarS(-0.5) * squared_norm);
+    // if(CovSize == 2 && !enoki::all(enoki::isfinite(pdf))) {
+    //     std::cerr << fmt::format(
+    //         "pdf={}\n"
+    //         "point={}\n"
+    //         "tangent={}\n"
+    //         "standardized={}\n"
+    //         "cov_sqrt={}\n"
+    //         "inv_cov_sqrt_det={}\n"
+    //         "inv_jacobian={}\n",
+    //         pdf,
+    //         point,
+    //         tangent,
+    //         standardized,
+    //         cov_sqrt,
+    //         inv_cov_sqrt_det,
+    //         inv_jacobian
+    //     );
+    // }
 }
 
 template<typename Matrix_, typename TangentSpace_>
@@ -334,15 +352,13 @@ auto product(SDMM& first, SDMM& second, SDMM& result) {
 
     for(size_t first_i = 0; first_i < first_packets; ++first_i) {
         for(size_t second_i = 0; second_i < second_size; ++second_i) {
-            size_t product_i = first_i + second_i * first_size;
+            size_t product_i = first_i * second_size + second_i;
 
             MatrixExpr first_cov = enoki::packet(first.cov, first_i);
             MatrixS second_cov_original = enoki::slice(second.cov, second_i);
 
             auto&& first_ts = enoki::packet(first.tangent_space, first_i);
             auto&& second_ts = enoki::slice(second.tangent_space, second_i);
-
-            auto dot = enoki::dot(first_ts.mean, second_ts.mean);
 
             TangentS first_mean = enoki::zero<TangentS>();
             EmbeddedS second_mean_embedded = second_ts.mean;
@@ -362,7 +378,20 @@ auto product(SDMM& first, SDMM& second, SDMM& result) {
             if(!enoki::all(is_psd)) {
                 // spdlog::info("second_cov_original={}", second_cov_original);
                 auto embedded_local = first_ts.coordinate_system.to * second_mean_embedded;
-                std::cerr << fmt::format("is_psd={}, second_mean_embedded={}, embedded_local={}, J_to={}\n", is_psd, second_mean_embedded, embedded_local, J);
+                std::cerr << fmt::format(
+                    "({}, {}) = "
+                    "is_psd={}, "
+                    "second_mean_embedded={}, "
+                    "embedded_local={}, "
+                    "J_to={}\n",
+                    first_i,
+                    second_i,
+                    is_psd,
+                    second_mean_embedded,
+                    embedded_local,
+                    J
+                );
+
                 std::cerr << fmt::format("second_cov={}\n", second_cov);
                 // spdlog::info("cov_sum={}", cov_sum);
             }
@@ -415,8 +444,9 @@ auto product(SDMM& first, SDMM& second, SDMM& result) {
                 gaussian_normalization<ScalarS, SDMM::CovSize> *
                 enoki::exp(ScalarS(-0.5) * squared_norm);
 
+            auto dot = enoki::dot(first_ts.mean, second_ts.mean);
             enoki::packet(result.weight.pmf, product_i) = enoki::select(
-                cov_det == 0, // dot < 0
+                cov_det == 0, // || dot < 0,
                 0,
                 new_weight
             );

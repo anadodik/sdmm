@@ -15,6 +15,7 @@
 #include "sdmm/linalg/matrix.h"
 
 #define VECTORIZE_WRAP(FUNC_NAME) [](auto&&... params) { FUNC_NAME(params...); }
+#define VECTORIZE_WRAP_FWD(FUNC_NAME) [](auto&&... params) { FUNC_NAME(std::forward<decltype(params)>(params)...); }
 #define VECTORIZE_WRAP_OUTPUT(FUNC_NAME) [](auto&& output, auto&&... params) { output = FUNC_NAME(params...); }
 
 #define VECTORIZE_WRAP_MEMBER(FUNC_NAME) \

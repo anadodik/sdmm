@@ -112,7 +112,7 @@ template<typename Joint_, typename Marginal_, typename Conditional_>
 auto SDMMConditioner<Joint_, Marginal_, Conditional_>::prepare_vectorized(
     const Joint_& joint
 ) -> void {
-    create_marginal(joint, marginal);
+    sdmm::create_marginal(joint, marginal);
     matrix_expr_t<Marginal> cov_aa_sqrt_inv = inverse_lower_tri(marginal.cov_sqrt);
 
     matrix_expr_t<Conditional> cov_bb;

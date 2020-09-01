@@ -16,6 +16,11 @@ using normal_t = typename T::Normal;
 template<typename T>
 using normal_s_t = typename T::NormalS;
 
+template<typename Scalar>
+auto is_valid_sample(Scalar&& weight) -> bool {
+    return (std::isfinite(weight) && weight >= 1e-8);
+}
+
 template<typename SDMM_>
 struct Data {
     using SDMM = SDMM_;
@@ -60,7 +65,7 @@ struct Data {
         const ScalarIn& weight_,
         const ScalarIn& heuristic_pdf_
     ) -> void {
-        if(weight_ == 0) {
+        if(!is_valid_sample(weight_)) {
             return;
         }
 

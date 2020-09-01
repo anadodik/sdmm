@@ -29,6 +29,7 @@ struct DirectionalTangentSpace {
     using ScalarS = enoki::scalar_t<Scalar>;
     using EmbeddedS = sdmm::Vector<ScalarS, enoki::array_size_v<Embedded>>;
     using TangentS = sdmm::Vector<ScalarS, enoki::array_size_v<Tangent>>;
+    using MatrixS = sdmm::Matrix<ScalarS, 3>;
     using MaskS = enoki::mask_t<ScalarS>;
 
     using Packet = nested_packet_t<Scalar>;
@@ -47,7 +48,7 @@ struct DirectionalTangentSpace {
             angle / sin_angle
         );
 
-        inv_jacobian = enoki::select(cos_angle <= -1, 0, rcp_sinc_angle);
+        inv_jacobian = enoki::select(cos_angle <= -0.99, 0, rcp_sinc_angle);
 
         return TangentExpr{
             embedded_local.x() * rcp_sinc_angle,
@@ -60,11 +61,11 @@ struct DirectionalTangentSpace {
         ScalarExpr length = enoki::norm(tangent);
         auto [sin_angle, cos_angle] = enoki::sincos(length);
         const ScalarExpr sinc_angle = enoki::select(
-            sin_angle < 1e-4,
+            (sin_angle < 1e-2), // || (length <= M_PI - 1e-2),
             ScalarExpr(1),
             sin_angle / length
         );
-        inv_jacobian = enoki::select(length < M_PI, sinc_angle, 0);
+        inv_jacobian = enoki::select(length > M_PI - 2e-2, 0, sinc_angle);
 
         const EmbeddedExpr embedded_local{
             tangent.x() * sinc_angle,
@@ -116,11 +117,11 @@ struct DirectionalTangentSpace {
         const ScalarExpr sin_angle_sqr = 1 - cos_angle * cos_angle;
         const ScalarExpr sin_angle = enoki::safe_sqrt(sin_angle_sqr);
         const ScalarExpr rcp_sinc_angle = enoki::select(
-            sin_angle < 1e-2,
+            sin_angle < 1e-2 || cos_angle < -0.99,
             ScalarExpr(1),
             angle / sin_angle
         );
-        inv_jacobian = enoki::select(cos_angle <= -1, 0, rcp_sinc_angle);
+        inv_jacobian = enoki::select(cos_angle <= -0.99, 0, rcp_sinc_angle);
 
         jacobian(0, 0) = rcp_sinc_angle;
         jacobian(1, 1) = rcp_sinc_angle;
@@ -129,7 +130,7 @@ struct DirectionalTangentSpace {
         jacobian(1, 0) = enoki::zero<ScalarExpr>(enoki::slices(rcp_sinc_angle));
 
         ScalarExpr inv_sin_angle_sqr = enoki::select(
-            sin_angle < 1e-2,
+            sin_angle < 1e-2 || cos_angle < -0.99,
             0,
             1 / sin_angle_sqr
         );
@@ -160,13 +161,13 @@ struct DirectionalTangentSpace {
         const ScalarExpr length = enoki::sqrt(length_sqr);
         auto [sin_angle, cos_angle] = enoki::sincos(length);
         const ScalarExpr sinc_angle = enoki::select(
-            sin_angle < 1e-2,
+            sin_angle < 1e-2 || cos_angle < -0.99,
             ScalarExpr(1),
             sin_angle / length
         );
 
         ScalarExpr cos_minus_sinc_over_length_sqr = enoki::select(
-            sin_angle < 1e-2,
+            sin_angle < 1e-2 || cos_angle < -0.99,
             0,
             (cos_angle - sinc_angle) / length_sqr
         );
@@ -178,10 +179,12 @@ struct DirectionalTangentSpace {
         jacobian(1, 0) = off_diagonal;
 
         jacobian(2, 0) = enoki::select(
-            sin_angle < 1e-2, 0, -tangent.coeff(0) * sinc_angle
+            sin_angle < 1e-2 || cos_angle < -0.99,
+            0, -tangent.coeff(0) * sinc_angle
         );
         jacobian(2, 1) = enoki::select(
-            sin_angle < 1e-2, 0, -tangent.coeff(1) * sinc_angle
+            sin_angle < 1e-2 || cos_angle < -0.99,
+            0, -tangent.coeff(1) * sinc_angle
         );
 
         jacobian = coordinate_system.from * jacobian;
@@ -198,6 +201,19 @@ struct DirectionalTangentSpace {
     auto set_mean(const Embedded& mean_) -> void {
         mean = enoki::normalize(mean_);
         coordinate_system.prepare(mean);
+    }
+
+    auto rotate_to_wo(const EmbeddedS& wi) -> void {
+        ScalarS neg_phi = -std::atan2(wi.y(), wi.x());
+        MatrixS rotation(
+            std::cos(neg_phi), -std::sin(neg_phi), 0,
+            std::sin(neg_phi), std::cos(neg_phi), 0,
+            0, 0, 1
+        );
+        MatrixS inv_rotation = linalg::transpose(rotation);
+        coordinate_system.to = coordinate_system.to * rotation;
+        coordinate_system.from = inv_rotation * coordinate_system.from;
+        mean = inv_rotation * mean;
     }
 
     Embedded mean;
