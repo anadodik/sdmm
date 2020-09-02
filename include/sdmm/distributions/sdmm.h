@@ -320,19 +320,20 @@ auto SDMM<Matrix_, TangentSpace_>::posterior(
 }
 
 template<
-    typename SDMM,
+    typename SDMM1,
+    typename SDMM2,
     std::enable_if_t<
-        sdmm::embedded_t<SDMM>::Size != sdmm::tangent_t<SDMM>::Size &&
-        sdmm::embedded_t<SDMM>::Size == 3,
+        sdmm::embedded_t<SDMM1>::Size != sdmm::tangent_t<SDMM1>::Size &&
+        sdmm::embedded_t<SDMM1>::Size == 3,
         int
     > = 0
 >
-auto product(SDMM& first, SDMM& second, SDMM& result) {
+auto product(SDMM1& first, SDMM2& second, SDMM1& result) {
     // TODO: implement single lobe selection from learned BSDF
-    using ScalarS = typename SDMM::ScalarS;
-    using EmbeddedS = sdmm::embedded_s_t<SDMM>;
-    using TangentS = sdmm::tangent_s_t<SDMM>;
-    using MatrixS = sdmm::matrix_s_t<SDMM>;
+    using ScalarS = typename SDMM1::ScalarS;
+    using EmbeddedS = sdmm::embedded_s_t<SDMM1>;
+    using TangentS = sdmm::tangent_s_t<SDMM1>;
+    using MatrixS = sdmm::matrix_s_t<SDMM1>;
 
     using ScalarExpr = enoki::expr_t<decltype(enoki::packet(first.weight.pmf, 0))>;
     using MatrixExpr = enoki::expr_t<decltype(enoki::packet(first.cov, 0))>;
@@ -441,7 +442,7 @@ auto product(SDMM& first, SDMM& second, SDMM& result) {
                 second_weight * 
                 inv_cov_sqrt_det *
                 inv_jacobian *
-                gaussian_normalization<ScalarS, SDMM::CovSize> *
+                gaussian_normalization<ScalarS, SDMM1::CovSize> *
                 enoki::exp(ScalarS(-0.5) * squared_norm);
 
             auto dot = enoki::dot(first_ts.mean, second_ts.mean);
@@ -456,23 +457,24 @@ auto product(SDMM& first, SDMM& second, SDMM& result) {
 }
 
 template<
-    typename SDMM,
+    typename SDMM1,
+    typename SDMM2,
     std::enable_if_t<
-        (sdmm::embedded_t<SDMM>::Size != sdmm::tangent_t<SDMM>::Size &&
-        sdmm::embedded_t<SDMM>::Size > 3),
+        (sdmm::embedded_t<SDMM1>::Size != sdmm::tangent_t<SDMM1>::Size &&
+        sdmm::embedded_t<SDMM1>::Size > 3),
         int
     > = 0
 >
-auto product(SDMM& first, SDMM& second, SDMM& result) {
+auto product(SDMM1& first, SDMM2& second, SDMM1& result) {
     result = first;
 }
 
-template<typename SDMM, std::enable_if_t<sdmm::embedded_t<SDMM>::Size == sdmm::tangent_t<SDMM>::Size, int> = 0>
-auto product(SDMM& first, SDMM& second, SDMM& result) {
-    using ScalarS = typename SDMM::ScalarS;
-    using EmbeddedS = sdmm::embedded_s_t<SDMM>;
-    using TangentS = sdmm::tangent_s_t<SDMM>;
-    using MatrixS = sdmm::matrix_s_t<SDMM>;
+template<typename SDMM1, typename SDMM2, std::enable_if_t<sdmm::embedded_t<SDMM1>::Size == sdmm::tangent_t<SDMM1>::Size, int> = 0>
+auto product(SDMM1& first, SDMM2& second, SDMM1& result) {
+    using ScalarS = typename SDMM1::ScalarS;
+    using EmbeddedS = sdmm::embedded_s_t<SDMM1>;
+    using TangentS = sdmm::tangent_s_t<SDMM1>;
+    using MatrixS = sdmm::matrix_s_t<SDMM1>;
     size_t first_size = enoki::slices(first);
     size_t second_size = enoki::slices(second);
     size_t product_size = first_size * second_size;
@@ -488,7 +490,7 @@ auto product(SDMM& first, SDMM& second, SDMM& result) {
 
             MatrixS cov_sum = first_cov + second_cov;
             MatrixS cov_sum_sqrt;
-            typename SDMM::MaskS is_psd;
+            typename SDMM1::MaskS is_psd;
             linalg::cholesky(cov_sum, cov_sum_sqrt, is_psd);
             MatrixS inv_cov_sum_sqrt = linalg::inverse_lower_tri(cov_sum_sqrt);
 
