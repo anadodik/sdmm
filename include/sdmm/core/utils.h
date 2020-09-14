@@ -101,6 +101,8 @@ namespace sdmm {
 using namespace nlohmann;
 namespace fs = std::filesystem;
 
+template<typename...> struct Debug;
+
 template<typename T>
 auto save_json(const T& t, const fs::path& path) {
     json j;

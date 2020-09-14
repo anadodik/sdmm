@@ -54,6 +54,12 @@ struct SDMMConditioner {
     auto create_conditional_vectorized(
         const MarginalEmbeddedS& point, Conditional& out
     ) -> void;
+    auto create_conditional_weights_vectorized(
+        const MarginalEmbeddedS& point, Conditional& out
+    ) -> void;
+    auto create_conditional_means_and_covs(
+        const MarginalEmbeddedS& point, Conditional& out
+    ) -> void;
 
     Marginal marginal;
     Conditional conditional;
@@ -103,6 +109,50 @@ inline auto create_conditional(
         point,
         out
     );
+    // enoki::vectorize(
+    //     [](auto&& pmf) {
+    //         using ScalarExpr = enoki::expr_t<decltype(pmf)>;
+    //         pmf = enoki::select(enoki::isfinite(pmf), pmf, ScalarExpr(0.f));
+    //     },
+    //     out.weight.pmf
+    // );
+    bool cdf_success = out.weight.prepare();
+    return cdf_success;
+}
+
+template<typename Conditioner>
+inline auto create_conditional_pruned(
+    // cannot declare point as const because enoki complains
+    Conditioner& conditioner,
+    typename Conditioner::MarginalEmbeddedS& point,
+    typename Conditioner::Conditional& out,
+    size_t max_components,
+    size_t preserve_idx=-1
+) -> bool {
+    using ScalarS = typename Conditioner::Joint::ScalarS;
+
+    enoki::vectorize_safe(
+        VECTORIZE_WRAP_MEMBER(create_conditional_vectorized),
+        conditioner,
+        point,
+        out
+    );
+    out.weight.cdf = enoki::arange<decltype(out.weight.cdf)>(enoki::slices(out.weight.cdf));
+    std::sort(out.weight.cdf.begin(), out.weight.cdf.end(), [&out](ScalarS idx1, ScalarS idx2) {
+        return out.weight.pmf.coeff((size_t) idx1) < out.weight.pmf.coeff((size_t) idx2); // sort ascending
+    });
+
+    // Kill off weakest components
+    size_t n_components = enoki::slices(out);
+    for(size_t slice_i = 0; slice_i < n_components - max_components; ++slice_i) {
+        size_t sorted_i = (size_t) out.weight.cdf.coeff(slice_i);
+        if(sorted_i == preserve_idx) {
+            --max_components;
+            continue;
+        }
+        out.weight.pmf.coeff(sorted_i) = 0;
+    }
+
     bool cdf_success = out.weight.prepare();
     // assert(cdf_success);
     return cdf_success;
@@ -174,6 +224,29 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_vector
         )
     );
     marginal.posterior(point, out.weight.pmf);
+    out.cov = conditional.cov;
+    out.cov_sqrt = conditional.cov_sqrt;
+    out.inv_cov_sqrt_det = conditional.inv_cov_sqrt_det;
+}
+
+template<typename Joint_, typename Marginal_, typename Conditional_>
+auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_weights_vectorized(
+    const MarginalEmbeddedS& point, Conditional& out
+) -> void {
+    marginal.posterior(point, out.weight.pmf);
+}
+
+template<typename Joint_, typename Marginal_, typename Conditional_>
+auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_means_and_covs(
+    const MarginalEmbeddedS& point, Conditional& out
+) -> void {
+    ScalarExpr inv_jacobian_to, inv_jacobian_from;
+    out.tangent_space.set_mean(
+        tangent_space.from(
+            mean_transform * marginal.tangent_space.to(point, inv_jacobian_to),
+            inv_jacobian_from
+        )
+    );
     out.cov = conditional.cov;
     out.cov_sqrt = conditional.cov_sqrt;
     out.inv_cov_sqrt_det = conditional.inv_cov_sqrt_det;

@@ -314,13 +314,15 @@ template<typename SDMM_>
 template<typename SDMM_>
 auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
     // spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
+    using ScalarS = typename Stats<SDMM_>::ScalarS;
     using ScalarExpr = typename Stats<SDMM_>::ScalarExpr;
     using MatrixExpr = typename Stats<SDMM_>::MatrixExpr;
-    ScalarExpr weight_prior_decay = 1.0 / enoki::pow(3.0, enoki::min(30, em.iterations_run));
-    ScalarExpr cov_prior_strength_decay = 1.0 / enoki::pow(2.0, enoki::min(30, em.iterations_run));
 
-    ScalarExpr weight_prior_decayed = em.weight_prior * weight_prior_decay;
-    ScalarExpr cov_prior_strength_decayed = em.cov_prior_strength * cov_prior_strength_decay;
+    ScalarS weight_prior_decay = ScalarS(1.0 / enoki::pow(3.0, enoki::min(30, em.iterations_run)));
+    ScalarS cov_prior_strength_decay = ScalarS(1.0 / enoki::pow(2.0, enoki::min(30, em.iterations_run)));
+
+    ScalarS weight_prior_decayed = em.weight_prior * weight_prior_decay;
+    ScalarS cov_prior_strength_decayed = em.cov_prior_strength * cov_prior_strength_decay;
     MatrixExpr cov_prior_decayed = em.cov_prior * cov_prior_strength_decayed;
 
     // spdlog::info("weight_prior_decay={}", weight_prior_decay);
@@ -383,8 +385,9 @@ auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
         0
     );
 
-    MatrixExpr mean_subtraction = 
-            sdmm::linalg::outer(em.stats_normalized.mean) * rcp_weight;
+    MatrixExpr mean_subtraction = sdmm::linalg::outer(em.stats_normalized.mean) * rcp_weight;
+    // Debug<decltype(blub), decltype(rcp_weight), decltype(sdmm::linalg::outer(em.stats_normalized.mean))> debug;
+
     MatrixExpr cov_unnormalized = 
         em.stats_normalized.cov - mean_subtraction + cov_prior_decayed;
 

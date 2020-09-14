@@ -133,7 +133,7 @@ ENOKI_INLINE Result operator*(const Matrix<T0, Rows1, Cols1> &m0,
 
 template <typename T0, typename T1, size_t Rows, size_t Cols, enoki::enable_if_t<!T1::IsMatrix> = 0>
 ENOKI_INLINE auto operator*(const sdmm::linalg::Matrix<T0, Rows, Cols> &m, const T1 &s) {
-    if constexpr (enoki::array_size_v<T1> == Cols && T1::IsVector) {
+    if constexpr (enoki::array_size_v<T1> == Cols && T1::IsVector && !std::is_same_v<T1, T0>) {
         using EValue  = enoki::expr_t<T0, enoki::value_t<T1>>;
         using EVector = enoki::Array<EValue, Rows>;
         EVector sum = enoki::zero<EVector>();

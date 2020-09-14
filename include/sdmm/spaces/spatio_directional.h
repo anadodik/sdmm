@@ -88,9 +88,9 @@ struct SpatioDirectionalTangentSpace {
             coordinate_system.to * directional(embedded);
         const ScalarExpr cos_angle = directional_local.z();
         auto length = enoki::norm(directional_local);
-        if(enoki::any(enoki::abs(length - 1) >= 1e-5)) {
+        if(enoki::any(enoki::abs(length - 1) >= 1e-4)) {
             std::cerr << fmt::format("directional_local.length()={},\n{}\n{}\n", length, embedded, directional_local);
-            assert(enoki::all(cos_angle >= -1 - 1e-5));
+            assert(enoki::all(cos_angle >= -1 - 1e-4));
         }
 
         const ScalarExpr angle = enoki::safe_acos(cos_angle);

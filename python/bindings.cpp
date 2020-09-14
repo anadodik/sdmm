@@ -16,11 +16,27 @@
 namespace py = pybind11;
 using namespace py::literals;
 
-constexpr static size_t PacketSize = 8;
+constexpr static size_t PacketSize = 4;
 using Scalar = float;
 using Packet = enoki::Packet<Scalar, PacketSize>;
 using Value = enoki::DynamicArray<Packet>;
 using RNG = enoki::PCG32<float>;
+
+
+using JointEmbedded = sdmm::Vector<Value, 4 + 1>;
+using JointTangent = sdmm::Vector<Value, 4>;
+using TangentSpace = sdmm::SpatioDirectionalTangentSpace<JointEmbedded, JointTangent>;
+using SDMM = sdmm::SDMM<sdmm::Matrix<Value, 4>, TangentSpace>;
+using Stats = sdmm::Stats<SDMM>;
+
+using Tangent = sdmm::tangent_t<TangentSpace>;
+using Embedded = sdmm::embedded_t<TangentSpace>;
+using Scalar_ = enoki::value_t<Tangent>;
+
+static_assert(std::is_same_v<
+    decltype(enoki::packet(Stats(), 0))::ScalarExpr,
+    Packet
+>);
 
 template<size_t Size>
 auto add_euclidian(py::module& m) {
@@ -231,6 +247,12 @@ auto add_conditioner(py::module& m, const std::string& name) {
             sdmm::create_conditional(conditioner, point, conditional); 
             return conditional;
         })
+		.def("condition_pruned", [](Conditioner& conditioner, Point& point, size_t max_components, size_t preserve_idx=-1) {
+            Conditional conditional;
+            enoki::set_slices(conditional, enoki::slices(conditioner));
+            sdmm::create_conditional_pruned(conditioner, point, conditional, max_components, preserve_idx); 
+            return conditional;
+        })
     ;
 }
 
@@ -346,12 +368,12 @@ PYBIND11_MODULE(pysdmm, m) {
 
     // add_sdmm<3>(dist_m, opt_m);
     add_sdmm<4>(dist_m, opt_m);
-    // add_sdmm<5>(dist_m, opt_m);
+    add_sdmm<5>(dist_m, opt_m);
 
     add_gmm<2>(dist_m, opt_m);
-    // add_gmm<3>(dist_m, opt_m);
-    // add_gmm<4>(dist_m, opt_m);
-    // add_gmm<5>(dist_m, opt_m);
+    add_gmm<3>(dist_m, opt_m);
+    add_gmm<4>(dist_m, opt_m);
+    add_gmm<5>(dist_m, opt_m);
 
     add_dmm(dist_m, opt_m);
 }

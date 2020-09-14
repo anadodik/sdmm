@@ -22,7 +22,6 @@ struct Categorical {
     Value cdf;
 
     BoolOuter prepare();
-    void normalize(const ValueOuter& inv_normalizer);
 
     ENOKI_STRUCT(Categorical, pmf, cdf);
 };
@@ -56,14 +55,6 @@ template<typename Value_, std::enable_if_t<!enoki::is_array_v<typename Categoric
 }
 
 template<typename Value_>
-auto Categorical<Value_>::normalize(
-    const ValueOuter& inv_normalizer
-) -> void {
-    cdf *= inv_normalizer;
-    pmf *= inv_normalizer;
-}
-
-template<typename Value_>
 [[nodiscard]] auto Categorical<Value_>::prepare() -> BoolOuter {
     size_t n_slices = enoki::slices(pmf);
     if(enoki::slices(cdf) != n_slices) {
@@ -75,16 +66,21 @@ template<typename Value_>
     }
 
     ValueOuter pmf_sum = enoki::slice(cdf, n_slices - 1);
-    bool is_valid = pmf_sum != 0;
+    bool is_valid = pmf_sum > 1e-20f;
     if(!is_valid) {
         return is_valid;
     }
-    ValueOuter inv_normalizer = 1 / enoki::select(pmf_sum > 0.f, pmf_sum, 1.f);
+    ValueOuter inv_normalizer = 1 / enoki::select(is_valid, pmf_sum, 1.f);
 
     // This can be further optimized by
     // only iterating over cdfs which have non-zero sums.
+    auto normalize = [inv_normalizer](auto&& pmf, auto&& cdf) {
+        cdf *= inv_normalizer;
+        pmf *= inv_normalizer;
+    };
+
     enoki::vectorize(
-        VECTORIZE_WRAP_MEMBER(normalize), *this, inv_normalizer
+        normalize, pmf, cdf
     );
 
     return is_valid;

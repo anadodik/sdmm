@@ -340,7 +340,13 @@ auto product(SDMM1& first, SDMM2& second, SDMM1& result) {
 
     size_t first_size = enoki::slices(first);
     size_t second_size = enoki::slices(second);
-    size_t product_size = first_size * second_size;
+    size_t nonzero_second_size = 0;
+    for(size_t second_i = 0; second_i < second_size; ++second_i) {
+        if(second.weight.pmf.coeff(second_i) != 0) {
+            ++nonzero_second_size;
+        }
+    }
+    size_t product_size = first_size * nonzero_second_size;
 
     if(enoki::slices(result) != product_size) {
         enoki::set_slices(result, product_size);
@@ -352,8 +358,13 @@ auto product(SDMM1& first, SDMM2& second, SDMM1& result) {
     bool use_jacobian_correction = false;
 
     for(size_t first_i = 0; first_i < first_packets; ++first_i) {
+        size_t nonzero_second_i = 0;
         for(size_t second_i = 0; second_i < second_size; ++second_i) {
-            size_t product_i = first_i * second_size + second_i;
+            if(second.weight.pmf.coeff(second_i) == 0) {
+                continue;
+            }
+            size_t product_i = first_i * nonzero_second_size + nonzero_second_i;
+            ++nonzero_second_i;
 
             MatrixExpr first_cov = enoki::packet(first.cov, first_i);
             MatrixS second_cov_original = enoki::slice(second.cov, second_i);
