@@ -41,7 +41,6 @@ struct Data {
     Embedded point;
     Normal normal;
     Scalar weight;
-    Scalar heuristic_weight;
     Scalar heuristic_pdf;
 
     EmbeddedStats mean_point = 0;
@@ -61,7 +60,6 @@ struct Data {
             other.point,
             other.normal,
             other.weight,
-            other.heuristic_weight,
             other.heuristic_pdf
         );
     }
@@ -71,7 +69,6 @@ struct Data {
         const EmbeddedIn& point_,
         const NormalIn& normal_,
         const ScalarIn& weight_,
-        const ScalarIn& heuristic_weight_,
         const ScalarIn& heuristic_pdf_
     ) -> void {
         if(!is_valid_sample(weight_)) {
@@ -97,7 +94,6 @@ struct Data {
         enoki::slice(point, size) = point_;
         enoki::slice(normal, size) = normal_;
         enoki::slice(weight, size) = weight_;
-        enoki::slice(heuristic_weight, size) = heuristic_weight_;
         enoki::slice(heuristic_pdf, size) = heuristic_pdf_;
         ++size;
     }
@@ -135,7 +131,7 @@ struct Data {
         return enoki::hsum(packet_sum);
     }
 
-    ENOKI_STRUCT(Data, point, normal, weight, heuristic_weight, heuristic_pdf);
+    ENOKI_STRUCT(Data, point, normal, weight, heuristic_pdf);
 };
 
 template<typename SDMM_>

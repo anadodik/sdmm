@@ -120,6 +120,7 @@ auto load_json(T& t, const fs::path& path) {
     // std::cerr << std::setw(4) << j << std::endl;
     t = j.get<T>();
     t.tangent_space.set_mean(t.tangent_space.mean);
+    enoki::set_slices(t.cov_inv, enoki::slices(t.cov));
     t.prepare();
 }
 

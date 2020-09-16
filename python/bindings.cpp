@@ -169,6 +169,7 @@ auto add_mm(py::module& m, const std::string& name) {
 		.def_readwrite("weight", &SDMM::weight)
 		.def_readwrite("tangent_space", &SDMM::tangent_space)
 		.def_readwrite("cov", &SDMM::cov)
+		.def_readwrite("compute_inverse", &SDMM::compute_inverse)
 		.def("prepare", &SDMM::prepare)
 		.def(
             "save",
@@ -189,6 +190,14 @@ auto add_mm(py::module& m, const std::string& name) {
             [](SDMM& first, SDMM& second) {
                 SDMM result;
                 sdmm::product(first, second, result);
+                return result;
+            }
+        )
+		.def(
+            "product_approximate",
+            [](SDMM& first, SDMM& second) {
+                SDMM result;
+                sdmm::product_approximate(first, second, result);
                 return result;
             }
         )

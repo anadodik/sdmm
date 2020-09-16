@@ -60,6 +60,30 @@ inline auto solve(
     return x;
 }
 
+template<
+    typename ValueLHS_,
+    typename ValueRHS_,
+    size_t Size,
+    typename ValueLHS = enoki::expr_t<ValueLHS_>,
+    typename ValueRHS = enoki::expr_t<ValueRHS_>
+>
+inline auto solve_upper_tri(
+    const Matrix<ValueLHS_, Size>& L,
+    const Vector<ValueRHS_, Size>& b
+) -> Vector<ValueLHS, Size> {
+    Vector<ValueLHS, Size> x;
+    x[Size - 1] = b[Size - 1] / L(Size - 1, Size - 1);
+    for(int r = Size - 2; r >= 0; --r) {
+        ValueLHS numerator = b[r];
+        for(int c = Size - 1; c > r; --c) {
+            numerator -= L(r, c) * x[c];
+        }
+        x[r] = numerator / L(r, r);
+        assert(enoki::any(L(r, r) != ValueLHS(0)));
+    }
+    return x;
+}
+
 template<typename Matrix, typename MatrixExpr=enoki::expr_t<Matrix>>
 inline auto inverse_lower_tri(const Matrix& cholesky) -> MatrixExpr {
     using Scalar = enoki::value_t<enoki::column_t<Matrix>>;

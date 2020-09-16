@@ -66,7 +66,7 @@ template<typename Value_>
     }
 
     ValueOuter pmf_sum = enoki::slice(cdf, n_slices - 1);
-    bool is_valid = pmf_sum > 1e-20f;
+    bool is_valid = enoki::all(pmf_sum > 1e-20f);
     if(!is_valid) {
         return is_valid;
     }

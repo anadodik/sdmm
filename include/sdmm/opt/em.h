@@ -242,7 +242,8 @@ auto EM<SDMM_>::compute_stats_model_parallel(
         // spdlog::info("slice_{} pmf={}", slice_i, distribution.weight.pmf);
         auto posterior_sum = enoki::hsum(posteriors); 
         if(data_slice.heuristic_pdf != -1) {
-            posterior_sum = 0.5 * posterior_sum + 0.5 * data_slice.heuristic_pdf;
+            ScalarS heuristic_weight = 0.5;
+            posterior_sum = (1.0 - heuristic_weight) * posterior_sum + heuristic_weight * data_slice.heuristic_pdf;
         }
         if(posterior_sum == 0 || !std::isfinite(1.f / posterior_sum)) {
             continue;

@@ -68,7 +68,10 @@ struct SDMMConditioner {
     ConditionalTangentSpace tangent_space;
     MarginalEmbedded marginal_tangents;
 
-    ENOKI_STRUCT(SDMMConditioner, marginal, conditional, mean_transform, tangent_space, marginal_tangents);
+    bool compute_inverse = false;
+    bool normalize_weights = false;
+
+    ENOKI_STRUCT(SDMMConditioner, marginal, conditional, mean_transform, tangent_space, marginal_tangents, compute_inverse);
 };
 
 template<typename Conditioner>
@@ -76,6 +79,7 @@ inline auto prepare(
     // cannot declare joint as const because enoki complains
     Conditioner& conditioner, typename Conditioner::Joint& joint
 ) -> void {
+    conditioner.conditional.compute_inverse = conditioner.compute_inverse;
     enoki::vectorize_safe(
         VECTORIZE_WRAP_MEMBER(prepare_vectorized), std::forward<Conditioner>(conditioner), joint
     );
@@ -88,12 +92,17 @@ inline auto create_conditional(
     // cannot declare point as const because enoki complains
     Conditioner& conditioner, typename Conditioner::MarginalEmbeddedS& point
 ) -> bool {
+    conditioner.conditional.compute_inverse = conditioner.compute_inverse;
     enoki::vectorize_safe(
         VECTORIZE_WRAP_MEMBER(create_conditional_vectorized), conditioner, point
     );
-    bool cdf_success = conditioner.conditional.weight.prepare();
-    // assert(cdf_success);
-    return cdf_success;
+    if(conditioner.normalize_weights) {
+        bool cdf_success = conditioner.conditional.weight.prepare();
+        // assert(cdf_success);
+        return cdf_success;
+    } else {
+        return true;
+    }
 }
 
 template<typename Conditioner>
@@ -103,6 +112,7 @@ inline auto create_conditional(
     typename Conditioner::MarginalEmbeddedS& point,
     typename Conditioner::Conditional& out
 ) -> bool {
+    out.compute_inverse = conditioner.compute_inverse;
     enoki::vectorize_safe(
         VECTORIZE_WRAP_MEMBER(create_conditional_vectorized),
         conditioner,
@@ -116,8 +126,12 @@ inline auto create_conditional(
     //     },
     //     out.weight.pmf
     // );
-    bool cdf_success = out.weight.prepare();
-    return cdf_success;
+    if(conditioner.normalize_weights) {
+        bool cdf_success = conditioner.conditional.weight.prepare();
+        return cdf_success;
+    } else {
+        return true;
+    }
 }
 
 template<typename Conditioner>
@@ -223,6 +237,9 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_vector
             inv_jacobian_from
         )
     );
+    if(compute_inverse) {
+        out.cov_inv = conditional.cov_inv;
+    }
     marginal.posterior(point, out.weight.pmf);
     out.cov = conditional.cov;
     out.cov_sqrt = conditional.cov_sqrt;
@@ -247,6 +264,9 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_means_
             inv_jacobian_from
         )
     );
+    if(compute_inverse) {
+        out.cov_inv = conditional.cov_inv;
+    }
     out.cov = conditional.cov;
     out.cov_sqrt = conditional.cov_sqrt;
     out.inv_cov_sqrt_det = conditional.inv_cov_sqrt_det;
@@ -254,4 +274,4 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_means_
 
 }
 
-ENOKI_STRUCT_SUPPORT(sdmm::SDMMConditioner, marginal, conditional, mean_transform, tangent_space, marginal_tangents);
+ENOKI_STRUCT_SUPPORT(sdmm::SDMMConditioner, marginal, conditional, mean_transform, tangent_space, marginal_tangents, compute_inverse);
