@@ -226,7 +226,7 @@ auto EM<SDMM_>::compute_stats_model_parallel(
         // spdlog::info("slice_{} weight={}", slice_i, data_slice.weight);
         // spdlog::info("slice_{} point={}", slice_i, data_slice.point);
         enoki::vectorize_safe(
-            VECTORIZE_WRAP_MEMBER(pdf_gaussian),
+            VECTORIZE_WRAP_MEMBER(posterior),
             distribution,
             data_slice.point,
             posteriors,
@@ -234,27 +234,13 @@ auto EM<SDMM_>::compute_stats_model_parallel(
         );
         // spdlog::info("tangent={}", tangent);
         // spdlog::info("slice_{} pdf={}", slice_i, posteriors);
-        enoki::vectorize(
-            [](auto&& value, auto&& weight) { value *= weight; },
-            posteriors,
-            distribution.weight.pmf
-        );
         // spdlog::info("slice_{} pmf={}", slice_i, distribution.weight.pmf);
         auto posterior_sum = enoki::hsum(posteriors); 
-        if(data_slice.heuristic_pdf != -1) {
-            posterior_sum = 0.5 * posterior_sum + 0.5 * data_slice.heuristic_pdf;
-        }
         if(posterior_sum == 0 || !std::isfinite(1.f / posterior_sum)) {
             continue;
         }
 
         auto rcp_posterior = 1.f / posterior_sum;
-        if(data_slice.heuristic_pdf != -1) {
-            enoki::vectorize(
-                [](auto&& value) { value *= ScalarS(0.5); },
-                posteriors
-            );
-        }
         enoki::vectorize(
             [rcp_posterior](auto&& value) { value *= rcp_posterior; },
             posteriors
@@ -263,7 +249,8 @@ auto EM<SDMM_>::compute_stats_model_parallel(
         // spdlog::info("slice_{} posterior_sum={}", slice_i, enoki::hsum(posteriors));
         // spdlog::info("slice_{} weight={}", slice_i, data_slice.weight);
 
-        enoki::vectorize_safe(
+        // spdlog::info("batch_stats={}, posteriors={}, tangent={}", batch_stats.weight, posteriors, tangent);
+        enoki::vectorize(
             VECTORIZE_WRAP_MEMBER(plus_eq),
             batch_stats,
             

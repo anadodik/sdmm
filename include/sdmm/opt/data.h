@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <stdexcept>
 
@@ -23,6 +24,10 @@ auto is_valid_sample(Scalar&& weight) -> bool {
 
 template<typename SDMM_>
 struct Data {
+    Data(const Data& other) : capacity(other.capacity), size(other.size) {
+        reserve(capacity);
+    }
+
     using SDMM = SDMM_;
     using Scalar = typename SDMM::Scalar;
     using Embedded = sdmm::embedded_t<SDMM>;
@@ -38,15 +43,15 @@ struct Data {
     using EmbeddedStats = enoki::replace_scalar_t<EmbeddedS, double>;
     using PositionStats = PositionS; // enoki::replace_scalar_t<PositionS, double>;
 
+    // If adding a new data-entry, remember to update reserve.
     Embedded point;
     Normal normal;
     Scalar weight;
-    Scalar heuristic_pdf;
 
     EmbeddedStats mean_point = 0;
     EmbeddedStats mean_sqr_point = 0;
-    PositionStats min_position = 0;
-    PositionStats max_position = 0;
+    // PositionStats min_position = 0;
+    // PositionStats max_position = 0;
     uint32_t stats_size = 0;
 
     uint32_t size = 0;
@@ -59,8 +64,7 @@ struct Data {
         push_back(
             other.point,
             other.normal,
-            other.weight,
-            other.heuristic_pdf
+            other.weight
         );
     }
 
@@ -68,14 +72,15 @@ struct Data {
     auto push_back(
         const EmbeddedIn& point_,
         const NormalIn& normal_,
-        const ScalarIn& weight_,
-        const ScalarIn& heuristic_pdf_
+        const ScalarIn& weight_
     ) -> void {
         if(!is_valid_sample(weight_)) {
             return;
         }
 
-        if(size >= enoki::slices(point)) {
+        uint32_t idx = size++;
+
+        if(idx >= enoki::slices(point)) {
             // if(capacity > enoki::slices(point)) {
             //     enoki::set_slices(*this, capacity);
             // } else {
@@ -83,19 +88,16 @@ struct Data {
                 return;
             // }
         }
+        enoki::slice(point, idx) = point_;
+        enoki::slice(normal, idx) = normal_;
+        enoki::slice(weight, idx) = weight_;
         
+        ++stats_size;
         mean_point += point_;
         mean_sqr_point += enoki::sqr(point_);
-        enoki::expr_t<EmbeddedIn> point_copy = point_;
-        min_position = enoki::min(min_position, enoki::head<3>(point_copy));
-        max_position = enoki::max(max_position, enoki::head<3>(point_copy));
-        ++stats_size;
-
-        enoki::slice(point, size) = point_;
-        enoki::slice(normal, size) = normal_;
-        enoki::slice(weight, size) = weight_;
-        enoki::slice(heuristic_pdf, size) = heuristic_pdf_;
-        ++size;
+        // enoki::expr_t<EmbeddedIn> point_copy = point_;
+        // min_position = enoki::min(min_position, enoki::head<3>(point_copy));
+        // max_position = enoki::max(max_position, enoki::head<3>(point_copy));
     }
 
     auto clear() -> void {
@@ -105,14 +107,18 @@ struct Data {
     auto clear_stats() -> void {
         mean_point = enoki::zero<EmbeddedStats>();
         mean_sqr_point = enoki::zero<EmbeddedStats>();
-        min_position = enoki::full<PositionStats>(std::numeric_limits<float>::infinity());
-        max_position = enoki::full<PositionStats>(-std::numeric_limits<float>::infinity());
+        // min_position = enoki::full<PositionStats>(std::numeric_limits<float>::infinity());
+        // max_position = enoki::full<PositionStats>(-std::numeric_limits<float>::infinity());
         stats_size = 0;
     }
 
     auto reserve(uint32_t new_capacity) -> void {
+        // spdlog::info("new_capacity={}", new_capacity);
         capacity = new_capacity; 
-        enoki::set_slices(*this, capacity);
+        // enoki::set_slices(*this, capacity);
+        enoki::set_slices(point, capacity);
+        enoki::set_slices(normal, capacity);
+        enoki::set_slices(weight, capacity);
         clear();
         clear_stats();
     }
@@ -131,7 +137,7 @@ struct Data {
         return enoki::hsum(packet_sum);
     }
 
-    ENOKI_STRUCT(Data, point, normal, weight, heuristic_pdf);
+    ENOKI_STRUCT(Data, point, normal, weight);
 };
 
 template<typename SDMM_>
@@ -141,4 +147,4 @@ auto Data<SDMM_>::remove_non_finite() -> void {
 
 }
 
-ENOKI_STRUCT_SUPPORT(sdmm::Data, point, normal, weight, heuristic_pdf);
+ENOKI_STRUCT_SUPPORT(sdmm::Data, point, normal, weight);

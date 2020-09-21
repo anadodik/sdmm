@@ -47,4 +47,4 @@ struct CoordinateSystem {
 
 }
 
-ENOKI_STRUCT_SUPPORT(sdmm::linalg::CoordinateSystem,to, from);
+ENOKI_STRUCT_SUPPORT(sdmm::linalg::CoordinateSystem, to, from);

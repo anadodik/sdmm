@@ -26,6 +26,24 @@ struct Categorical {
     ENOKI_STRUCT(Categorical, pmf, cdf);
 };
 
+template<typename Categorical, typename RNG>
+auto sample(Categorical& distribution, RNG& rng) -> typename RNG::UInt32 {
+    auto weight_inv_sample = rng.next_float32();
+    using Float32 = typename RNG::Float32;
+    using UInt32 = typename RNG::UInt32;
+    UInt32 idx = enoki::binary_search(
+        0,
+        enoki::slices(distribution.cdf) - 1,
+        [&](UInt32 index) {
+            return distribution.cdf[index] < weight_inv_sample;
+        }
+    );
+    while(idx > 0 && distribution.pmf[idx] == 0) {
+        --idx;
+    }
+    return idx;
+}
+
 template<typename Value_, std::enable_if_t<enoki::is_array_v<typename Categorical<Value_>::BoolOuter>, int> = 0>
 [[nodiscard]] auto is_valid(const Categorical<Value_>& categorical) -> typename Categorical<Value_>::BoolOuter {
     using CategoricalV = Categorical<Value_>;
