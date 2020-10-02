@@ -45,12 +45,14 @@ target_compile_options(jmm PRIVATE
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-w>
     $<$<CXX_COMPILER_ID:MSVC>:/W1>
 )
+target_compile_features(jmm INTERFACE cxx_std_17)
 add_library(jmm_interface INTERFACE)
 target_include_directories(jmm_interface INTERFACE ext/jmm/include)
 target_compile_options(jmm_interface INTERFACE 
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-w>
     $<$<CXX_COMPILER_ID:MSVC>:/W1>
 )
+target_compile_features(jmm_interface INTERFACE cxx_std_17)
 
 # The main SDMM library.
 add_library(sdmm INTERFACE)

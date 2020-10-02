@@ -93,7 +93,7 @@ auto add_directional(py::module& m) {
             Embedded embedded = enoki::empty<Embedded>(n_slices);
             Value inv_jacobians = enoki::empty<Value>(n_slices);
             for(size_t slice_i = 0; slice_i < n_slices; ++slice_i) {
-                auto result = 
+                auto result =
                     ts.from(enoki::slice(tangent, slice_i), inv_jacobian);
                 enoki::slice(embedded, slice_i) = enoki::slice(result, 0);
                 inv_jacobians.coeff(slice_i) = inv_jacobian.coeff(0);
@@ -125,7 +125,7 @@ auto add_spatio_directional(py::module& m) {
 
 template<typename SDMM>
 auto add_mm_data(py::module& m, const std::string& name) {
-    using Data = sdmm::Data<SDMM>; 
+    using Data = sdmm::Data<SDMM>;
     py::class_<Data>(m, name.c_str())
         .def(py::init<>())
         .def("reserve", &Data::reserve, "new_capacity"_a)
@@ -135,13 +135,12 @@ auto add_mm_data(py::module& m, const std::string& name) {
         .def_readwrite("point", &Data::point)
         .def_readwrite("normal", &Data::normal)
         .def_readwrite("weight", &Data::weight)
-        .def_readwrite("heuristic_pdf", &Data::heuristic_pdf)
     ;
 }
 
 template<typename SDMM>
 auto add_mm_em(py::module& m, const std::string& name) {
-    using EM = sdmm::EM<SDMM>; 
+    using EM = sdmm::EM<SDMM>;
 
     py::class_<EM>(m, name.c_str())
         .def(py::init<>([](size_t n_components) {
@@ -195,8 +194,8 @@ auto add_mm(py::module& m, const std::string& name) {
 		.def(
 			"pdf",
 			[](SDMM& sdmm, const Embedded& embedded) {
-                Value pdf_single = enoki::empty<Value>(enoki::slices(sdmm)); 
-                Value pdfs = enoki::empty<Value>(enoki::slices(embedded)); 
+                Value pdf_single = enoki::empty<Value>(enoki::slices(sdmm));
+                Value pdfs = enoki::empty<Value>(enoki::slices(embedded));
                 for(size_t i = 0; i < enoki::slices(embedded); ++i) {
                     sdmm.posterior(enoki::slice(embedded, i), pdf_single);
                     pdfs.coeff(i) = enoki::hsum(pdf_single);
@@ -206,7 +205,7 @@ auto add_mm(py::module& m, const std::string& name) {
 			"embedded"_a
 		)
 		.def(
-            "sample", 
+            "sample",
             [](SDMM& sdmm, RNG& rng, size_t n_samples) -> std::pair<Embedded, Value> {
                 EmbeddedS sample;
                 TangentS tangent;
@@ -239,18 +238,18 @@ auto add_conditioner(py::module& m, const std::string& name) {
             if(enoki::slices(conditioner) != enoki::slices(joint)) {
                 enoki::set_slices(conditioner, enoki::slices(joint));
             }
-            sdmm::prepare(conditioner, joint); 
+            sdmm::prepare(conditioner, joint);
         })
 		.def("condition", [](Conditioner& conditioner, Point& point) {
             Conditional conditional;
             enoki::set_slices(conditional, enoki::slices(conditioner));
-            sdmm::create_conditional(conditioner, point, conditional); 
+            sdmm::create_conditional(conditioner, point, conditional);
             return conditional;
         })
 		.def("condition_pruned", [](Conditioner& conditioner, Point& point, size_t max_components, size_t preserve_idx=-1) {
             Conditional conditional;
             enoki::set_slices(conditional, enoki::slices(conditioner));
-            sdmm::create_conditional_pruned(conditioner, point, conditional, max_components, preserve_idx); 
+            sdmm::create_conditional_pruned(conditioner, point, conditional, max_components, preserve_idx);
             return conditional;
         })
     ;

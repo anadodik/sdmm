@@ -68,7 +68,7 @@ void initialize(
     for(size_t sc_i = 0; sc_i < n_spatial_components; ++sc_i) {
         // size_t point_i = enoki::min(rng.next_float32() * data.size, data.size - 1);
         size_t point_i = sdmm::sample(sampling_dist, rng);
-        spdlog::info("Found point={}", point_i);
+        // spdlog::info("Found point={}", point_i);
 
         EmbeddedS mean = enoki::slice(data.point, point_i);
         Vector3 position(mean.coeff(0), mean.coeff(1), mean.coeff(2));
