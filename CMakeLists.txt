@@ -17,7 +17,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(WARNING_FLAGS "-Wall -Wextra -Wfloat-conversion -Wno-deprecated-declarations")
-    set(MATH_FLAGS "-funsafe-math-optimizations -fno-math-errno  ")
+    set(MATH_FLAGS "-funsafe-math-optimizations -fno-math-errno")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g ${WARNING_FLAGS} ${MATH_FLAGS} -stdlib=libc++ -march=native")
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(WARNING_FLAGS "-ftrack-macro-expansion=0 -Wall -Wextra -Wfloat-conversion -Wno-deprecated-declarations -Wno-misleading-indentation")
@@ -41,14 +41,14 @@ enoki_set_native_flags()
 add_library(jmm ext/jmm/include/jmm/multivariate_tangent_normal.cpp)
 target_include_directories(jmm PRIVATE ext/jmm/include)
 target_link_libraries(jmm PUBLIC ${CONAN_LIBS})
-target_compile_options(jmm PRIVATE 
+target_compile_options(jmm PRIVATE
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-w>
     $<$<CXX_COMPILER_ID:MSVC>:/W1>
 )
 target_compile_features(jmm INTERFACE cxx_std_17)
 add_library(jmm_interface INTERFACE)
 target_include_directories(jmm_interface INTERFACE ext/jmm/include)
-target_compile_options(jmm_interface INTERFACE 
+target_compile_options(jmm_interface INTERFACE
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-w>
     $<$<CXX_COMPILER_ID:MSVC>:/W1>
 )

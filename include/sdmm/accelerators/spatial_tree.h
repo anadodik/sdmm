@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include <sdmm/core/utils.h>
 #include <sdmm/linalg/aabb.h>
 
 namespace sdmm::accelerators {
@@ -56,6 +57,19 @@ struct STreeNode  {
     int depth;
 };
 
+// template<typename Scalar, int Size, typename Value>
+// void to_json(json& j, const STreeNode<Scalar, Size, Value>& node) {
+//     j = json{{"is_leaf", node.is_leaf}, {"axis", node.axis}};
+// }
+
+// template<typename Scalar, int Size, typename Value>
+// STreeNode<Scalar, Size, Value> from_json(const json& j) {
+//     STreeNode<Scalar, Size, Value> node;
+//     j.at("is_leaf").get_to(node.is_leaf);
+//     j.at("axis").get_to(node.axis);
+//     return std::move(node);
+// }
+
 template<typename Scalar, int Size, typename Value>
 class STree {
 public:
@@ -63,6 +77,7 @@ public:
     using AABB = typename Node::AABB;
     using Point = typename AABB::Point;
 
+    STree() = default;
     STree(const AABB& aabb, std::unique_ptr<Value> value) : m_aabb(aabb) {
         // Enlarge AABB to turn it into a cube. This has the effect
         // of nicer hierarchical subdivisions.
@@ -100,6 +115,10 @@ public:
         return m_nodes;
     }
 
+    const auto& aabb() {
+        return m_aabb;
+    }
+
     std::pair<int, Scalar> get_split_location(int node_i) {
         auto& data = m_nodes[node_i].value->data;
         auto mean_point = data.mean_point;
@@ -133,8 +152,8 @@ public:
         return {max_var_i, location};
     }
 
-    STreeNode<Scalar, Size, Value> create_child(int node_i, int child_i, Scalar splitLocation) {
-        STreeNode<Scalar, Size, Value> child;
+    Node create_child(int node_i, int child_i, Scalar splitLocation) {
+        Node child;
 
         // Set correct parameters for child node
         child.is_leaf = true;
@@ -198,8 +217,7 @@ public:
         for (int child_i = 0; child_i < 2; ++child_i) {
             // m_nodes[node_i].data_aabb = m_nodes[node_i].aabb;
             // Create node
-            STreeNode<Scalar, Size, Value> child =
-                create_child(node_i, child_i, 0.5);
+            Node child = create_child(node_i, child_i, 0.5);
 
             // Insert child into vector
             uint32_t child_idx = m_nodes.size();
@@ -242,8 +260,7 @@ public:
             std::pair<int, Scalar> split = get_split_location(node_i);
             m_nodes[node_i].axis = split.first;
             for (int child_i = 0; child_i < 2; ++child_i) {
-                STreeNode<Scalar, Size, Value> child =
-                    create_child(node_i, child_i, split.second);
+                Node child = create_child(node_i, child_i, split.second);
 
                 // Insert child into vector
                 uint32_t child_idx = m_nodes.size();
@@ -264,8 +281,42 @@ public:
     }
 
 private:
-    std::vector<STreeNode<Scalar, Size, Value>> m_nodes;
+    std::vector<Node> m_nodes;
     AABB m_aabb;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(STree, m_nodes, m_aabb);
 };
 
+}
+
+namespace nlohmann {
+    template<typename Scalar, int Size, typename Value>
+    struct adl_serializer<sdmm::accelerators::STreeNode<Scalar, Size, Value>> {
+        using STreeNode = sdmm::accelerators::STreeNode<Scalar, Size, Value>;
+        static void to_json(json& j, const STreeNode& node) {
+            j = json{
+                {"is_leaf", node.is_leaf},
+                {"axis", node.axis},
+                {"idx", node.idx},
+                {"children", node.children},
+                {"value", node.value},
+                {"aabb", node.aabb},
+                {"depth", node.depth}
+            };
+        }
+
+
+        // NLOHMANN_DEFINE_TYPE_INTRUSIVE(STreeNode, is_leaf, axis, idx, children, value, aabb, depth);
+        static STreeNode from_json(const json& j) {
+            STreeNode node;
+            j.at("is_leaf").get_to(node.is_leaf);
+            j.at("axis").get_to(node.axis);
+            j.at("idx").get_to(node.idx);
+            j.at("children").get_to(node.children);
+            node.value = j.at("value").get<std::unique_ptr<Value>>();
+            j.at("aabb").get_to(node.aabb);
+            j.at("depth").get_to(node.depth);
+            return node;
+        }
+    };
 }

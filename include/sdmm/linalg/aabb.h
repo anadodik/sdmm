@@ -1,5 +1,6 @@
 #pragma once
 
+#include <sdmm/core/utils.h>
 #include <sdmm/linalg/vector.h>
 
 namespace sdmm::linalg {
@@ -27,6 +28,8 @@ struct AABB {
 
     Point min;
     Point max;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(AABB, min, max);
 };
 
 }

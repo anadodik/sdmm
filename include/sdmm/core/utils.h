@@ -24,6 +24,26 @@
     }
 
 namespace nlohmann {
+
+    template <typename T>
+    struct adl_serializer<std::unique_ptr<T>> {
+        static void to_json(json& j, const std::unique_ptr<T>& opt) {
+            if (opt.get()) {
+                j = *opt;
+            } else {
+                j = nullptr;
+            }
+        }
+
+        static std::unique_ptr<T> from_json(const json& j) {
+            if (j.is_null()) {
+                return nullptr;
+            } else {
+                return std::make_unique<T>(std::move(j.get<T>()));
+            }
+        }
+    };
+
     template <typename T>
     struct adl_serializer<enoki::DynamicArray<T>> {
         static void to_json(json& j, const enoki::DynamicArray<T>& array) {
@@ -34,9 +54,11 @@ namespace nlohmann {
         }
 
         static void from_json(const json& j, enoki::DynamicArray<T>& array) {
-            enoki::set_slices(array, j["size"]);
-            for(size_t i = 0; i < array.size(); ++i) {
-                enoki::slice(array, i) = j["data"][i];
+            if(j["size"] > 0) {
+                enoki::set_slices(array, j["size"]);
+                for(size_t i = 0; i < array.size(); ++i) {
+                    enoki::slice(array, i) = j["data"][i];
+                }
             }
         }
     };
@@ -117,10 +139,8 @@ auto load_json(T& t, const fs::path& path) {
     std::ifstream file(path);
     json j;
     file >> j;
-    // std::cerr << std::setw(4) << j << std::endl;
     t = j.get<T>();
-    t.tangent_space.set_mean(t.tangent_space.mean);
-    t.prepare();
+    // std::cerr << std::setw(4) << j << std::endl;
 }
 
 template<typename Func, typename... Args>
@@ -193,18 +213,18 @@ struct outer_type<
 template<typename Value, typename New>
 using outer_type_t = typename outer_type<std::remove_reference_t<Value>, New>::type;
 
-template<typename Value, std::enable_if_t<!enoki::is_array_v<Value>, int> = 0> 
+template<typename Value, std::enable_if_t<!enoki::is_array_v<Value>, int> = 0>
 auto& coeff_safe(Value& value, [[maybe_unused]] size_t i) {
     assert(i == 0);
     return value;
 };
 
-template<typename Value, std::enable_if_t<enoki::is_array_v<Value>, int> = 0> 
+template<typename Value, std::enable_if_t<enoki::is_array_v<Value>, int> = 0>
 ENOKI_INLINE auto& coeff_safe(Value& value, size_t i) {
     return value.coeff(i);
 };
 
-template<typename Value, std::enable_if_t<enoki::is_array_v<Value>, int> = 0> 
+template<typename Value, std::enable_if_t<enoki::is_array_v<Value>, int> = 0>
 ENOKI_INLINE const auto& coeff_safe(const Value& value, size_t i) {
     return value.coeff(i);
 };

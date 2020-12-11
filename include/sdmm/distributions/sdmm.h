@@ -108,8 +108,6 @@ struct SDMM {
     TangentSpace tangent_space;
     Matrix cov;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(SDMM, weight.pmf, tangent_space.mean, cov)
-
     // TODO: make struct Cholesky {};
     Matrix cov_sqrt;
     Scalar inv_cov_sqrt_det;
@@ -127,6 +125,22 @@ struct SDMM {
         cov_is_psd
     );
 };
+
+template<typename Matrix, typename TangentSpace>
+void to_json(json& j, const SDMM<Matrix, TangentSpace>& sdmm) {
+    j = json{{"weight.pmf", sdmm.weight.pmf}, {"tangent_space.mean", sdmm.tangent_space.mean}, {"cov", sdmm.cov}};
+}
+
+template<typename Matrix, typename TangentSpace>
+void from_json(const json& j, SDMM<Matrix, TangentSpace>& sdmm) {
+    j.at("weight.pmf").get_to(sdmm.weight.pmf);
+    j.at("tangent_space.mean").get_to(sdmm.tangent_space.mean);
+    j.at("cov").get_to(sdmm.cov);
+    if(enoki::slices(sdmm.cov) > 0) {
+        sdmm.tangent_space.set_mean(sdmm.tangent_space.mean);
+        sdmm.prepare();
+    }
+}
 
 template<typename SDMM>
 [[nodiscard]] inline auto prepare_vectorized(SDMM& distribution) {
@@ -199,7 +213,7 @@ auto SDMM<Matrix_, TangentSpace_>::sample(
     }
 
     // if(enoki::slices(tangent) != enoki::slices(gaussian_idx)) {
-    //     enoki::set_slices(tangent, enoki::slices(gaussian_idx)); 
+    //     enoki::set_slices(tangent, enoki::slices(gaussian_idx));
     // }
     for(size_t dim_i = 0; dim_i < CovSize; dim_i += 2) {
         auto [u1, u2] = box_mueller_transform(
@@ -221,10 +235,10 @@ auto SDMM<Matrix_, TangentSpace_>::sample(
     // auto covs = enoki::gather<Matrix, sizeof(MatrixS)>(cov_sqrt.data(), weight_indices);
     tangent = TangentIn(sampled_cov_sqrt * tangent);
     // if(enoki::slices(sample) != enoki::slices(gaussian_idx)) {
-    //     enoki::set_slices(sample, enoki::slices(gaussian_idx)); 
+    //     enoki::set_slices(sample, enoki::slices(gaussian_idx));
     // }
     // if(enoki::slices(inv_jacobian) != enoki::slices(gaussian_idx)) {
-    //     enoki::set_slices(inv_jacobian, enoki::slices(gaussian_idx)); 
+    //     enoki::set_slices(inv_jacobian, enoki::slices(gaussian_idx));
     // }
     sample = enoki::slice(tangent_space, gaussian_idx).from(tangent, inv_jacobian);
     // for(size_t ts_i = 0; ts_i < enoki::slices(gaussian_idx); ++ts_i) {
@@ -448,9 +462,9 @@ auto product(SDMM1& first, SDMM2& second, SDMM1& result) {
             auto squared_norm = enoki::squared_norm(standardized);
             ScalarExpr first_weight = enoki::packet(first.weight.pmf, first_i);
             ScalarS second_weight = enoki::slice(second.weight.pmf, second_i);
-            ScalarExpr new_weight = 
+            ScalarExpr new_weight =
                 first_weight *
-                second_weight * 
+                second_weight *
                 inv_cov_sqrt_det *
                 inv_jacobian *
                 gaussian_normalization<ScalarS, SDMM1::CovSize> *
@@ -533,9 +547,8 @@ ENOKI_STRUCT_SUPPORT(
     weight,
     tangent_space,
     cov,
-    
+
     cov_sqrt,
     inv_cov_sqrt_det,
     cov_is_psd
 );
-

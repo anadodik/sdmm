@@ -10,13 +10,16 @@
 #include "sdmm/distributions/categorical.h"
 #include "sdmm/distributions/sdmm.h"
 #include "sdmm/distributions/sdmm_conditioner.h"
+#include "sdmm/distributions/sdmm_context.h"
 
 #include "sdmm/opt/em.h"
+
+#include "sdmm/accelerators/spatial_tree.h"
 
 namespace py = pybind11;
 using namespace py::literals;
 
-constexpr static size_t PacketSize = 4;
+constexpr static size_t PacketSize = 8;
 using Scalar = float;
 using Packet = enoki::Packet<Scalar, PacketSize>;
 using Value = enoki::DynamicArray<Packet>;
@@ -278,6 +281,9 @@ auto add_sdmm(py::module& dist_m, py::module& opt_m) {
 
     using Conditioner = sdmm::SDMMConditioner<JointSDMM, MarginalSDMM, ConditionalSDMM>;
 
+    using SDMMContext = sdmm::SDMMContext<JointSDMM, Conditioner, RNG>;
+    using Accelerator = sdmm::accelerators::STree<Scalar, 3, SDMMContext>;
+
     auto dist_name = fmt::format("SDMM{}", JointSize);
 	add_mm<JointSDMM>(dist_m, dist_name);
 
@@ -289,6 +295,28 @@ auto add_sdmm(py::module& dist_m, py::module& opt_m) {
 
     auto conditioner_name = fmt::format("SDMMConditioner{}", Size);
 	add_conditioner<Conditioner>(dist_m, conditioner_name);
+
+    using AABB = typename Accelerator::AABB;
+    py::class_<Accelerator>(dist_m, fmt::format("Accelerator{}", Size).c_str())
+        .def(py::init<>())
+		.def("find", [](Accelerator& accelerator, sdmm::Vector<Scalar, 3>& point) -> JointSDMM {
+            AABB aabb;
+            return accelerator.find(point, aabb)->sdmm;
+        })
+		.def(
+            "save",
+            [](Accelerator& accelerator, const std::string& path) {
+                sdmm::save_json<Accelerator>(accelerator, path);
+            },
+            "path"_a
+        )
+        .def(
+            "load",
+            [](Accelerator& accelerator, const std::string& path) {
+                sdmm::load_json<Accelerator>(accelerator, path);
+            },
+            "path"_a
+        );
 }
 
 template<size_t Size>
