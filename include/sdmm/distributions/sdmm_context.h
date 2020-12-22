@@ -23,9 +23,10 @@ struct SDMMContext {
     SDMMContext() = default;
     SDMMContext(size_t data_size) {
         data.reserve(data_size);
+        training_data.reserve(data_size);
     }
     // Copy constructor intentionally deleted.
-    // This is a large data structure and should not be copied often.
+    // This is a large data structure and should not be copied.
     SDMMContext(SDMMContext&& other) = default;
     SDMMContext& operator=(SDMMContext&& other) = default;
     ~SDMMContext() = default;
@@ -37,6 +38,8 @@ struct SDMMContext {
     RNG rng;
 
     sdmm::Data<JointSDMM> training_data;
+    bool update_ready = false;
+    bool initialized = false;
 
     MutexWrapper mutex_wrapper;
 

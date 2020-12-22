@@ -27,6 +27,8 @@ struct Data {
     Data(const Data& other) : capacity(other.capacity), size(other.size) {
         reserve(capacity);
     }
+    Data(Data&& other) = default;
+    Data& operator=(Data&& other) = default;
 
     using SDMM = SDMM_;
     using Scalar = typename SDMM::Scalar;
@@ -39,7 +41,7 @@ struct Data {
     using EmbeddedS = sdmm::embedded_s_t<SDMM>;
     using NormalS = sdmm::Vector<ScalarS, 3>;
     using PositionS = sdmm::Vector<ScalarS, 3>;
-    
+
     using EmbeddedStats = enoki::replace_scalar_t<EmbeddedS, double>;
     using PositionStats = PositionS; // enoki::replace_scalar_t<PositionS, double>;
 
@@ -91,7 +93,7 @@ struct Data {
         enoki::slice(point, idx) = point_;
         enoki::slice(normal, idx) = normal_;
         enoki::slice(weight, idx) = weight_;
-        
+
         ++stats_size;
         mean_point += point_;
         mean_sqr_point += enoki::sqr(point_);
@@ -114,7 +116,7 @@ struct Data {
 
     auto reserve(uint32_t new_capacity) -> void {
         // spdlog::info("new_capacity={}", new_capacity);
-        capacity = new_capacity; 
+        capacity = new_capacity;
         // enoki::set_slices(*this, capacity);
         enoki::set_slices(point, capacity);
         enoki::set_slices(normal, capacity);

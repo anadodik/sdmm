@@ -174,6 +174,7 @@ public:
         childValue->sdmm = m_nodes[node_i].value->sdmm;
         childValue->conditioner = m_nodes[node_i].value->conditioner;
         childValue->em = m_nodes[node_i].value->em;
+        childValue->initialized = m_nodes[node_i].value->initialized;
         for(size_t sample_i = 0; sample_i < m_nodes[node_i].value->data.size; ++sample_i) {
             Point point(
                 enoki::slice(m_nodes[node_i].value->data.point.coeff(0), sample_i),
@@ -229,6 +230,7 @@ public:
         }
 
         m_nodes[node_i].value->data = enoki::zero<decltype(Value::data)>(0);
+        m_nodes[node_i].value->training_data = enoki::zero<decltype(Value::data)>(0);
         m_nodes[node_i].value->em = enoki::zero<decltype(Value::em)>(0);
         m_nodes[node_i].value = nullptr;
 

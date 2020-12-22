@@ -27,7 +27,7 @@ struct Stats {
     using ScalarExpr = enoki::expr_t<Scalar>;
     using TangentExpr = enoki::expr_t<Tangent>;
     using MatrixExpr = enoki::expr_t<Matrix>;
-    
+
     using ScalarS = enoki::scalar_t<Scalar>;
 
     Scalar weight;
@@ -174,6 +174,39 @@ auto EM<SDMM_>::set_priors(
 }
 
 template<typename SDMM_>
+auto e_step(SDMM_& distribution, EM<SDMM_>& em, Data<SDMM_>& data) -> void {
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(distribution.weight.pmf)), distribution.weight.pmf);
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(em.stats_normalized.weight)), em.stats_normalized.weight);
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(em.batch_stats.weight)), em.batch_stats.weight);
+    WARN_ON_FAIL(enoki::all(enoki::isfinite(em.stats.weight)), em.stats.weight);
+
+    em.compute_stats_model_parallel(distribution, data);
+    // spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
+    em.interpolate_stats();
+    // spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
+    bool success_normalized = em.normalize_stats(data);
+    if(!success_normalized) {
+        return;
+    }
+    assert(success_normalized);
+    // spdlog::info("em.stats_normalized.weight={}", em.stats_normalized.weight);
+    if(enoki::packets(em) != enoki::packets(distribution)) {
+        spdlog::warn("Different number of packets!");
+    }
+}
+
+template<typename SDMM_>
+auto m_step(SDMM_& distribution, EM<SDMM_>& em) -> void {
+    enoki::vectorize_safe(
+        VECTORIZE_WRAP(update_model), distribution, em
+    );
+    // spdlog::info("distribution.mean={}", distribution.tangent_space.mean);
+    bool success_prepare = sdmm::prepare_vectorized(distribution);
+    assert(success_prepare);
+    ++em.iterations_run;
+}
+
+template<typename SDMM_>
 auto em_step(SDMM_& distribution, EM<SDMM_>& em, Data<SDMM_>& data) -> void {
     WARN_ON_FAIL(enoki::all(enoki::isfinite(distribution.weight.pmf)), distribution.weight.pmf);
     WARN_ON_FAIL(enoki::all(enoki::isfinite(em.stats_normalized.weight)), em.stats_normalized.weight);
@@ -235,7 +268,7 @@ auto EM<SDMM_>::compute_stats_model_parallel(
         // spdlog::info("tangent={}", tangent);
         // spdlog::info("slice_{} pdf={}", slice_i, posteriors);
         // spdlog::info("slice_{} pmf={}", slice_i, distribution.weight.pmf);
-        auto posterior_sum = enoki::hsum(posteriors); 
+        auto posterior_sum = enoki::hsum(posteriors);
         if(posterior_sum == 0 || !std::isfinite(1.f / posterior_sum)) {
             continue;
         }
@@ -253,7 +286,7 @@ auto EM<SDMM_>::compute_stats_model_parallel(
         enoki::vectorize(
             VECTORIZE_WRAP_MEMBER(plus_eq),
             batch_stats,
-            
+
             data_slice.weight * posteriors,
             tangent
         );
@@ -375,7 +408,7 @@ auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
     MatrixExpr mean_subtraction = sdmm::linalg::outer(em.stats_normalized.mean) * rcp_weight;
     // Debug<decltype(blub), decltype(rcp_weight), decltype(sdmm::linalg::outer(em.stats_normalized.mean))> debug;
 
-    MatrixExpr cov_unnormalized = 
+    MatrixExpr cov_unnormalized =
         em.stats_normalized.cov - mean_subtraction + cov_prior_decayed;
 
     MatrixExpr cov_normalized = cov_unnormalized * rcp_cov_weight;

@@ -38,7 +38,7 @@ void initialize(
     em = enoki::zero<EM>((size_t) n_components);
 
     sdmm.cov = enoki::zero<decltype(sdmm.cov)>(n_components);
-    static const boost::math::chi_squared chi_sqr(6); // TODO: try with 3
+    static const boost::math::chi_squared chi_sqr(3);
     static const ScalarS contained_mass = 0.90;
     static const ScalarS max_rad_sqr = (ScalarS) boost::math::quantile(chi_sqr, contained_mass);
     ScalarS width_var = 0.5 * spatial_distance * spatial_distance / max_rad_sqr;
