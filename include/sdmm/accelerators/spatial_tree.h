@@ -230,7 +230,7 @@ public:
         }
 
         m_nodes[node_i].value->data = enoki::zero<decltype(Value::data)>(0);
-        m_nodes[node_i].value->training_data = enoki::zero<decltype(Value::data)>(0);
+        m_nodes[node_i].value->training_data = enoki::zero<decltype(Value::training_data)>(0);
         m_nodes[node_i].value->em = enoki::zero<decltype(Value::em)>(0);
         m_nodes[node_i].value = nullptr;
 
