@@ -5,17 +5,6 @@
 #include <sdmm/core/utils.h>
 #include <sdmm/opt/em.h>
 
-struct MutexWrapper {
-    MutexWrapper() = default;
-    ~MutexWrapper() = default;
-    MutexWrapper([[maybe_unused]] const MutexWrapper& mutex_wrapper) { };
-    MutexWrapper([[maybe_unused]] MutexWrapper&& mutex_wrapper) { };
-    MutexWrapper& operator=([[maybe_unused]] const MutexWrapper& mutex_wrapper) { return *this; };
-    MutexWrapper& operator=([[maybe_unused]] MutexWrapper&& mutex_wrapper) { return *this; };
-
-    std::mutex mutex;
-};
-
 namespace sdmm {
 
 template<typename JointSDMM, typename Conditioner, typename RNG>

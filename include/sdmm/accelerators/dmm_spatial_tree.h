@@ -8,14 +8,14 @@
 namespace sdmm::accelerators {
 
 template<typename Scalar, int Size, typename Value>
-struct STreeNode  {
+struct DMMSTreeNode  {
     using AABB = sdmm::linalg::AABB<Scalar, Size>;
     using Point = typename AABB::Point;
 
-    STreeNode() : is_leaf(true), axis(0), children{0, 0}, value(nullptr), depth(-1) { }
+    DMMSTreeNode() : is_leaf(true), axis(0), children{0, 0}, value(nullptr), depth(-1) { }
 
     Value* find(
-        const Point& point, const std::vector<STreeNode>& nodes, AABB& found_aabb
+        const Point& point, const std::vector<DMMSTreeNode>& nodes, AABB& found_aabb
     ) const {
         if(is_leaf) {
             found_aabb = aabb;
@@ -58,27 +58,27 @@ struct STreeNode  {
 };
 
 // template<typename Scalar, int Size, typename Value>
-// void to_json(json& j, const STreeNode<Scalar, Size, Value>& node) {
+// void to_json(json& j, const DMMSTreeNode<Scalar, Size, Value>& node) {
 //     j = json{{"is_leaf", node.is_leaf}, {"axis", node.axis}};
 // }
 
 // template<typename Scalar, int Size, typename Value>
-// STreeNode<Scalar, Size, Value> from_json(const json& j) {
-//     STreeNode<Scalar, Size, Value> node;
+// DMMSTreeNode<Scalar, Size, Value> from_json(const json& j) {
+//     DMMSTreeNode<Scalar, Size, Value> node;
 //     j.at("is_leaf").get_to(node.is_leaf);
 //     j.at("axis").get_to(node.axis);
 //     return std::move(node);
 // }
 
 template<typename Scalar, int Size, typename Value>
-class STree {
+class DMMSTree {
 public:
-    using Node = STreeNode<Scalar, Size, Value>;
+    using Node = DMMSTreeNode<Scalar, Size, Value>;
     using AABB = typename Node::AABB;
     using Point = typename AABB::Point;
 
-    STree() = default;
-    STree(const AABB& aabb, std::unique_ptr<Value> value) : m_aabb(aabb) {
+    DMMSTree() = default;
+    DMMSTree(const AABB& aabb, std::unique_ptr<Value> value) : m_aabb(aabb) {
         // Enlarge AABB to turn it into a cube. This has the effect
         // of nicer hierarchical subdivisions.
         Point diagonal = m_aabb.diagonal();
@@ -285,16 +285,16 @@ private:
     std::vector<Node> m_nodes;
     AABB m_aabb;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(STree, m_nodes, m_aabb);
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DMMSTree, m_nodes, m_aabb);
 };
 
 }
 
 namespace nlohmann {
     template<typename Scalar, int Size, typename Value>
-    struct adl_serializer<sdmm::accelerators::STreeNode<Scalar, Size, Value>> {
-        using STreeNode = sdmm::accelerators::STreeNode<Scalar, Size, Value>;
-        static void to_json(json& j, const STreeNode& node) {
+    struct adl_serializer<sdmm::accelerators::DMMSTreeNode<Scalar, Size, Value>> {
+        using DMMSTreeNode = sdmm::accelerators::DMMSTreeNode<Scalar, Size, Value>;
+        static void to_json(json& j, const DMMSTreeNode& node) {
             j = json{
                 {"is_leaf", node.is_leaf},
                 {"axis", node.axis},
@@ -307,9 +307,9 @@ namespace nlohmann {
         }
 
 
-        // NLOHMANN_DEFINE_TYPE_INTRUSIVE(STreeNode, is_leaf, axis, idx, children, value, aabb, depth);
-        static STreeNode from_json(const json& j) {
-            STreeNode node;
+        // NLOHMANN_DEFINE_TYPE_INTRUSIVE(DMMSTreeNode, is_leaf, axis, idx, children, value, aabb, depth);
+        static DMMSTreeNode from_json(const json& j) {
+            DMMSTreeNode node;
             j.at("is_leaf").get_to(node.is_leaf);
             j.at("axis").get_to(node.axis);
             j.at("idx").get_to(node.idx);

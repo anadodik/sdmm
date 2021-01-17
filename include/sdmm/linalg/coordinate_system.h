@@ -45,6 +45,20 @@ struct CoordinateSystem {
     ENOKI_STRUCT(CoordinateSystem, to, from);
 };
 
+template<typename Vector>
+void to_json(json& j, const CoordinateSystem<Vector>& coordinate_system) {
+    j = json{
+        {"coordinate_system.to", coordinate_system.to},
+        {"coordinate_system.from", coordinate_system.from},
+    };
+}
+
+template<typename Vector>
+void from_json(const json& j, CoordinateSystem<Vector>& coordinate_system) {
+    j.at("coordinate_system.to").get_to(coordinate_system.to);
+    j.at("coordinate_system.from").get_to(coordinate_system.from);
+}
+
 }
 
 ENOKI_STRUCT_SUPPORT(sdmm::linalg::CoordinateSystem, to, from);

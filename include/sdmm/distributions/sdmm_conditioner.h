@@ -50,10 +50,26 @@ struct SDMMConditioner {
 
     auto prepare_vectorized(const Joint& joint) -> void;
 
-    auto create_conditional_vectorized(const MarginalEmbeddedS& point) -> void;
+    template<
+        typename C = Conditional_,
+        std::enable_if_t<
+            C::TangentSpace::HasTangentSpaceOffset, int
+        > = 0
+    >
     auto create_conditional_vectorized(
         const MarginalEmbeddedS& point, Conditional& out
     ) -> void;
+
+    template<
+        typename C = Conditional_,
+        std::enable_if_t<
+            !C::TangentSpace::HasTangentSpaceOffset, int
+        > = 0
+    >
+    auto create_conditional_vectorized(
+        const MarginalEmbeddedS& point, Conditional& out
+    ) -> void;
+
     auto create_conditional_weights_vectorized(
         const MarginalEmbeddedS& point, Conditional& out
     ) -> void;
@@ -86,19 +102,6 @@ inline auto prepare(
 template<typename Conditioner>
 inline auto create_conditional(
     // cannot declare point as const because enoki complains
-    Conditioner& conditioner, typename Conditioner::MarginalEmbeddedS& point
-) -> bool {
-    enoki::vectorize_safe(
-        VECTORIZE_WRAP_MEMBER(create_conditional_vectorized), conditioner, point
-    );
-    bool cdf_success = conditioner.conditional.weight.prepare();
-    // assert(cdf_success);
-    return cdf_success;
-}
-
-template<typename Conditioner>
-inline auto create_conditional(
-    // cannot declare point as const because enoki complains
     Conditioner& conditioner,
     typename Conditioner::MarginalEmbeddedS& point,
     typename Conditioner::Conditional& out
@@ -109,13 +112,6 @@ inline auto create_conditional(
         point,
         out
     );
-    // enoki::vectorize(
-    //     [](auto&& pmf) {
-    //         using ScalarExpr = enoki::expr_t<decltype(pmf)>;
-    //         pmf = enoki::select(enoki::isfinite(pmf), pmf, ScalarExpr(0.f));
-    //     },
-    //     out.weight.pmf
-    // );
     bool cdf_success = out.weight.prepare();
     return cdf_success;
 }
@@ -199,20 +195,12 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::prepare_vectorized(
 }
 
 template<typename Joint_, typename Marginal_, typename Conditional_>
-auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_vectorized(
-    const MarginalEmbeddedS& point
-) -> void {
-    ScalarExpr inv_jacobian_to, inv_jacobian_from;
-    conditional.tangent_space.set_mean(
-        tangent_space.from(
-            mean_transform * marginal.tangent_space.to(point, inv_jacobian_to),
-            inv_jacobian_from
-        )
-    );
-    marginal.posterior(point, conditional.weight.pmf, marginal_tangents);
-}
-
-template<typename Joint_, typename Marginal_, typename Conditional_>
+template<
+    typename Conditional,
+    std::enable_if_t<
+      !Conditional::TangentSpace::HasTangentSpaceOffset, int
+    >
+>
 auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_vectorized(
     const MarginalEmbeddedS& point, Conditional& out
 ) -> void {
@@ -223,6 +211,25 @@ auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_vector
             inv_jacobian_from
         )
     );
+    marginal.posterior(point, out.weight.pmf);
+    out.cov = conditional.cov;
+    out.cov_sqrt = conditional.cov_sqrt;
+    out.inv_cov_sqrt_det = conditional.inv_cov_sqrt_det;
+}
+
+template<typename Joint_, typename Marginal_, typename Conditional_>
+template<
+    typename Conditional,
+    std::enable_if_t<
+      Conditional::TangentSpace::HasTangentSpaceOffset, int
+    >
+>
+auto SDMMConditioner<Joint_, Marginal_, Conditional_>::create_conditional_vectorized(
+    const MarginalEmbeddedS& point, Conditional& out
+) -> void {
+    ScalarExpr inv_jacobian_to, inv_jacobian_from;
+    out.tangent_space = tangent_space;
+    out.tangent_space.tangent_mean = mean_transform * marginal.tangent_space.to(point, inv_jacobian_to);
     marginal.posterior(point, out.weight.pmf);
     out.cov = conditional.cov;
     out.cov_sqrt = conditional.cov_sqrt;

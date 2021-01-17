@@ -35,6 +35,9 @@ struct SpatioDirectionalTangentSpace {
 
     using Packet = nested_packet_t<Scalar>;
 
+    constexpr static bool IsEuclidian = false;
+    constexpr static bool HasTangentSpaceOffset = false;
+
     template<typename EmbeddedIn, size_t... Indices>
     auto to_unwrap(
         const EmbeddedIn& embedded,
@@ -142,6 +145,102 @@ struct SpatioDirectionalTangentSpace {
         );
     }
 
+    auto to_center_jacobian() const -> sdmm::Matrix<ScalarExpr, Tangent::Size, Embedded::Size> {
+        using DirectionalJacobian = sdmm::Matrix<ScalarExpr, 2, 3>;
+        using Jacobian = sdmm::Matrix<ScalarExpr, Tangent::Size, Embedded::Size>;
+        DirectionalJacobian directional_jacobian = enoki::zero<DirectionalJacobian>();
+        Jacobian jacobian = enoki::zero<Jacobian>();
+        for(size_t diag_i = 0; diag_i < 2; ++diag_i) {
+            directional_jacobian(diag_i, diag_i) = enoki::full<ScalarExpr>(
+                1.f, enoki::slices(directional_jacobian)
+            );
+        }
+        directional_jacobian = directional_jacobian * coordinate_system.to;
+        for(size_t diag_i = 0; diag_i < Tangent::Size - 2; ++diag_i) {
+            jacobian(diag_i, diag_i) = enoki::full<ScalarExpr>(
+                1.f, enoki::slices(jacobian)
+            );
+        }
+        for(size_t r = 0; r < 2; ++r) {
+            for(size_t c = 0; c < 3; ++c) {
+                jacobian(r + Tangent::Size - 2, c + Embedded::Size - 3) = directional_jacobian(r, c);
+            }
+        }
+        return jacobian;
+    }
+
+    // Calculates the Jacobian matrix approximation for the transformation
+    // \log_{\mu} ( \vec{t} )
+    template<typename TangentIn>
+    auto from_jacobian(
+        const TangentIn& tangent
+    ) const -> std::pair<EmbeddedExpr, sdmm::Matrix<ScalarExpr, Embedded::Size, Tangent::Size>> {
+        constexpr static ScalarS cos_angle_min = -0.98;
+
+        using DirectionalJacobian = sdmm::Matrix<ScalarExpr, 3, 2>;
+        using Jacobian = sdmm::Matrix<ScalarExpr, Embedded::Size, Tangent::Size>;
+        DirectionalJacobian directional_jacobian = enoki::zero<DirectionalJacobian>();
+        Jacobian jacobian = enoki::zero<Jacobian>();
+
+        const DirectionalTangentExpr directional_tangent = directional(tangent);
+        const ScalarExpr length_sqr = enoki::squared_norm(directional_tangent);
+        const ScalarExpr length = enoki::sqrt(length_sqr);
+        auto [sin_angle, cos_angle] = enoki::sincos(length);
+        const ScalarExpr sinc_angle = enoki::select(
+            sin_angle < 1e-2 || cos_angle < cos_angle_min,
+            ScalarExpr(1),
+            sin_angle / length
+        );
+
+        ScalarExpr cos_minus_sinc_over_length_sqr = enoki::select(
+            sin_angle < 1e-2 || cos_angle < cos_angle_min,
+            0,
+            (cos_angle - sinc_angle) / length_sqr
+        );
+        directional_jacobian(0, 0) = sinc_angle + directional_tangent.coeff(0) * directional_tangent.coeff(0) * cos_minus_sinc_over_length_sqr;
+        directional_jacobian(1, 1) = sinc_angle + directional_tangent.coeff(1) * directional_tangent.coeff(1) * cos_minus_sinc_over_length_sqr;
+
+        ScalarExpr off_diagonal = directional_tangent.coeff(0) * directional_tangent.coeff(1) * cos_minus_sinc_over_length_sqr;
+        directional_jacobian(0, 1) = off_diagonal;
+        directional_jacobian(1, 0) = off_diagonal;
+
+        directional_jacobian(2, 0) = enoki::select(
+            sin_angle < 1e-2 || cos_angle < cos_angle_min,
+            0, -directional_tangent.coeff(0) * sinc_angle
+        );
+        directional_jacobian(2, 1) = enoki::select(
+            sin_angle < 1e-2 || cos_angle < cos_angle_min,
+            0, -directional_tangent.coeff(1) * sinc_angle
+        );
+        directional_jacobian = coordinate_system.from * directional_jacobian;
+        for(size_t diag_i = 0; diag_i < Tangent::Size - 2; ++diag_i) {
+            jacobian(diag_i, diag_i) = enoki::full<ScalarExpr>(
+                1.f, enoki::slices(jacobian)
+            );
+        }
+        for(size_t r = 0; r < 3; ++r) {
+            for(size_t c = 0; c < 2; ++c) {
+                jacobian(r + Embedded::Size - 3, c + Tangent::Size - 2) = directional_jacobian(r, c);
+            }
+        }
+
+        const DirectionalEmbeddedExpr embedded_local{
+            directional_tangent.x() * sinc_angle,
+            directional_tangent.y() * sinc_angle,
+            cos_angle
+        };
+        const DirectionalEmbeddedExpr directional_embedded = coordinate_system.from * embedded_local;
+        EmbeddedExpr embedded = from_unwrap(
+            tangent,
+            std::make_index_sequence<Tangent::Size - 2>{},
+            directional_embedded.x(),
+            directional_embedded.y(),
+            directional_embedded.z()
+        );
+
+        return {embedded, jacobian};
+    }
+
     auto set_mean(const Embedded& mean_) -> void {
         mean = mean_;
         DirectionalEmbeddedExpr directional_mean(
@@ -159,6 +258,20 @@ struct SpatioDirectionalTangentSpace {
 
     ENOKI_STRUCT(SpatioDirectionalTangentSpace, mean, coordinate_system);
 };
+
+template<typename Embedded, typename Tangent>
+void to_json(json& j, const SpatioDirectionalTangentSpace<Embedded, Tangent>& tangent_space) {
+    j = json{
+        {"tangent_space.mean", tangent_space.mean},
+        {"tangent_space.coordinate_system", tangent_space.coordinate_system},
+    };
+}
+
+template<typename Embedded, typename Tangent>
+void from_json(const json& j, SpatioDirectionalTangentSpace<Embedded, Tangent>& tangent_space) {
+    j.at("tangent_space.mean").get_to(tangent_space.mean);
+    j.at("tangent_space.coordinate_system").get_to(tangent_space.coordinate_system);
+}
 
 }
 

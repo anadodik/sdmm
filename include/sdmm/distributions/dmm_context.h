@@ -5,31 +5,20 @@
 #include <sdmm/core/utils.h>
 #include <sdmm/opt/em.h>
 
-struct MutexWrapper {
-    MutexWrapper() = default;
-    ~MutexWrapper() = default;
-    MutexWrapper([[maybe_unused]] const MutexWrapper& mutex_wrapper) { };
-    MutexWrapper([[maybe_unused]] MutexWrapper&& mutex_wrapper) { };
-    MutexWrapper& operator=([[maybe_unused]] const MutexWrapper& mutex_wrapper) { return *this; };
-    MutexWrapper& operator=([[maybe_unused]] MutexWrapper&& mutex_wrapper) { return *this; };
-
-    std::mutex mutex;
-};
-
 namespace sdmm {
 
 template<typename SDMM, typename DMM, typename RNG>
-struct SDMMContext {
-    SDMMContext() = default;
-    SDMMContext(size_t data_size) {
+struct DMMContext {
+    DMMContext() = default;
+    DMMContext(size_t data_size) {
         data.reserve(data_size);
         training_data.reserve(data_size);
     }
     // Copy constructor intentionally deleted.
     // This is a large data structure and should not be copied.
-    SDMMContext(SDMMContext&& other) = default;
-    SDMMContext& operator=(SDMMContext&& other) = default;
-    ~SDMMContext() = default;
+    DMMContext(DMMContext&& other) = default;
+    DMMContext& operator=(DMMContext&& other) = default;
+    ~DMMContext() = default;
 
     SDMM sdmm;
     DMM dmm;
@@ -44,7 +33,7 @@ struct SDMMContext {
 
     MutexWrapper mutex_wrapper;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(SDMMContext, dmm);
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DMMContext, dmm);
 };
 
 }

@@ -434,12 +434,18 @@ auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
     );
     distribution.weight.pmf = em.updated_model.weight;
     typename SDMM_::ScalarExpr inv_jacobian;
-    distribution.tangent_space.set_mean(
-        distribution.tangent_space.from(em.updated_model.mean, inv_jacobian)
+    auto [new_embedded_mean, from_jacobian] = distribution.tangent_space.from_jacobian(
+        em.updated_model.mean
     );
-    distribution.cov = em.updated_model.cov;
+    distribution.tangent_space.set_mean(
+        new_embedded_mean
+    );
+    auto to_jacobian = distribution.tangent_space.to_center_jacobian();
+    auto jacobian = to_jacobian * from_jacobian;
+    distribution.cov = jacobian * em.updated_model.cov * linalg::transpose(jacobian);
 
     em.stats_normalized.cov -= linalg::outer(em.stats_normalized.mean) * rcp_weight;
+    em.stats_normalized.cov = jacobian * em.stats_normalized.cov * linalg::transpose(jacobian);
     em.stats.cov = enoki::select(
         non_zero_weights && finite_rcp_weights,
         em.stats_normalized.cov * em.total_weight,

@@ -261,3 +261,14 @@ constexpr std::string_view type_name() {
 }
 
 }
+
+struct MutexWrapper {
+    MutexWrapper() = default;
+    ~MutexWrapper() = default;
+    MutexWrapper([[maybe_unused]] const MutexWrapper& mutex_wrapper) { };
+    MutexWrapper([[maybe_unused]] MutexWrapper&& mutex_wrapper) { };
+    MutexWrapper& operator=([[maybe_unused]] const MutexWrapper& mutex_wrapper) { return *this; };
+    MutexWrapper& operator=([[maybe_unused]] MutexWrapper&& mutex_wrapper) { return *this; };
+
+    std::mutex mutex;
+};

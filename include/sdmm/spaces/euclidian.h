@@ -31,6 +31,9 @@ struct EuclidianTangentSpace {
 
     using Packet = nested_packet_t<Scalar>;
 
+    constexpr static bool IsEuclidian = true;
+    constexpr static bool HasTangentSpaceOffset = false;
+
     template<typename EmbeddedIn>
     auto to(const EmbeddedIn& embedded, ScalarExpr& inv_jacobian) const -> TangentExpr {
         inv_jacobian = ScalarExpr(1);
@@ -53,6 +56,18 @@ struct EuclidianTangentSpace {
 
     ENOKI_STRUCT(EuclidianTangentSpace, mean, dummy);
 };
+
+template<typename Embedded, typename Tangent>
+void to_json(json& j, const EuclidianTangentSpace<Embedded, Tangent>& tangent_space) {
+    j = json{
+        {"tangent_space.mean", tangent_space.mean},
+    };
+}
+
+template<typename Embedded, typename Tangent>
+void from_json(const json& j, EuclidianTangentSpace<Embedded, Tangent>& tangent_space) {
+    j.at("tangent_space.mean").get_to(tangent_space.mean);
+}
 
 }
 
