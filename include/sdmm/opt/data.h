@@ -29,6 +29,7 @@ struct Data {
     }
     Data(Data&& other) = default;
     Data& operator=(Data&& other) = default;
+    virtual ~Data() = default;
 
     using SDMM = SDMM_;
     using Scalar = typename SDMM::Scalar;

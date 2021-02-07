@@ -38,7 +38,7 @@ struct STreeNode  {
                 found_child = child_idx;
             }
         }
-        assert(found_children != -1);
+        assert(found_child != -1);
         if(
             auto found = nodes[found_child].find(point, nodes, found_aabb);
             found != nullptr
@@ -197,7 +197,7 @@ public:
     }
 
     void split_to_depth_recurse(uint32_t node_i, int depth, int max_depth, int recursion_depth) {
-        // std::cerr << "Nodes size: " << m_nodes.size() << ", depth: " << depth << "\n";
+	// std::cerr << "Nodes size: " << m_nodes.size() << ", depth: " << depth << "\n";
 
         int max_axis = (depth == 0) ? Size : 3;
         int next_depth = (m_nodes[node_i].axis == max_axis - 1) ? (depth + 1) : depth;
