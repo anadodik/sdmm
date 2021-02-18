@@ -53,8 +53,6 @@ struct Data {
 
     EmbeddedStats mean_point = 0;
     EmbeddedStats mean_sqr_point = 0;
-    // PositionStats min_position = 0;
-    // PositionStats max_position = 0;
     uint32_t stats_size = 0;
 
     uint32_t size = 0;
@@ -98,9 +96,6 @@ struct Data {
         ++stats_size;
         mean_point += point_;
         mean_sqr_point += enoki::sqr(point_);
-        // enoki::expr_t<EmbeddedIn> point_copy = point_;
-        // min_position = enoki::min(min_position, enoki::head<3>(point_copy));
-        // max_position = enoki::max(max_position, enoki::head<3>(point_copy));
     }
 
     auto clear() -> void {
@@ -110,8 +105,6 @@ struct Data {
     auto clear_stats() -> void {
         mean_point = enoki::zero<EmbeddedStats>();
         mean_sqr_point = enoki::zero<EmbeddedStats>();
-        // min_position = enoki::full<PositionStats>(std::numeric_limits<float>::infinity());
-        // max_position = enoki::full<PositionStats>(-std::numeric_limits<float>::infinity());
         stats_size = 0;
     }
 
