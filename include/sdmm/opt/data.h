@@ -11,18 +11,18 @@
 
 namespace sdmm {
 
-template<typename T>
+template <typename T>
 using normal_t = typename T::Normal;
 
-template<typename T>
+template <typename T>
 using normal_s_t = typename T::NormalS;
 
-template<typename Scalar>
+template <typename Scalar>
 auto is_valid_sample(Scalar&& weight) -> bool {
     return (std::isfinite(weight) && weight >= 1e-8);
 }
 
-template<typename SDMM_>
+template <typename SDMM_>
 struct Data {
     Data(const Data& other) : capacity(other.capacity), size(other.size) {
         reserve(capacity);
@@ -44,7 +44,8 @@ struct Data {
     using PositionS = sdmm::Vector<ScalarS, 3>;
 
     using EmbeddedStats = enoki::replace_scalar_t<EmbeddedS, double>;
-    using PositionStats = PositionS; // enoki::replace_scalar_t<PositionS, double>;
+    using PositionStats =
+        PositionS; // enoki::replace_scalar_t<PositionS, double>;
 
     // If adding a new data-entry, remember to update reserve.
     Embedded point;
@@ -60,33 +61,28 @@ struct Data {
 
     auto remove_non_finite() -> void;
 
-    template<typename DataSlice>
+    template <typename DataSlice>
     auto push_back(DataSlice&& other) -> void {
-        push_back(
-            other.point,
-            other.normal,
-            other.weight
-        );
+        push_back(other.point, other.normal, other.weight);
     }
 
-    template<typename EmbeddedIn, typename NormalIn, typename ScalarIn>
+    template <typename EmbeddedIn, typename NormalIn, typename ScalarIn>
     auto push_back(
         const EmbeddedIn& point_,
         const NormalIn& normal_,
-        const ScalarIn& weight_
-    ) -> void {
-        if(!is_valid_sample(weight_)) {
+        const ScalarIn& weight_) -> void {
+        if (!is_valid_sample(weight_)) {
             return;
         }
 
         uint32_t idx = size++;
 
-        if(idx >= enoki::slices(point)) {
+        if (idx >= enoki::slices(point)) {
             // if(capacity > enoki::slices(point)) {
             //     enoki::set_slices(*this, capacity);
             // } else {
-                throw std::runtime_error("Data full.\n");
-                return;
+            throw std::runtime_error("Data full.\n");
+            return;
             // }
         }
         enoki::slice(point, idx) = point_;
@@ -124,11 +120,8 @@ struct Data {
         using Index = enoki::Packet<uint32_t, 8>;
         Float packet_sum(0);
         for (auto [index, mask] : enoki::range<Index>(size)) {
-            packet_sum += select(
-                mask,
-                enoki::gather<Float>(weight, index),
-                Index(0)
-            );
+            packet_sum +=
+                select(mask, enoki::gather<Float>(weight, index), Index(0));
         }
         return enoki::hsum(packet_sum);
     }
@@ -136,11 +129,12 @@ struct Data {
     ENOKI_STRUCT(Data, point, normal, weight);
 };
 
-template<typename SDMM_>
+template <typename SDMM_>
 auto Data<SDMM_>::remove_non_finite() -> void {
-    weight = enoki::select(enoki::isfinite(weight) || weight < 0, weight, ScalarS(0));
+    weight = enoki::select(
+        enoki::isfinite(weight) || weight < 0, weight, ScalarS(0));
 }
 
-}
+} // namespace sdmm
 
 ENOKI_STRUCT_SUPPORT(sdmm::Data, point, normal, weight);

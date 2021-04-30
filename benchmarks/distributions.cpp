@@ -6,8 +6,8 @@
 #include "sdmm/distributions/sdmm.h"
 #include "sdmm/distributions/sdmm_conditioner.h"
 
-#include "sdmm/spaces/euclidian.h"
 #include "sdmm/spaces/directional.h"
+#include "sdmm/spaces/euclidian.h"
 #include "sdmm/spaces/spatio_directional.h"
 
 #if COMPARISON == 1
@@ -17,7 +17,7 @@
 using Scalar = float;
 
 #if COMPARISON == 1
-void conditioning_jmm(benchmark::State &state) {
+void conditioning_jmm(benchmark::State& state) {
     constexpr static int t_dims = 5;
     constexpr static int t_conditionalDims = 2;
     constexpr static int t_conditionDims = t_dims - t_conditionalDims;
@@ -32,20 +32,17 @@ void conditioning_jmm(benchmark::State &state) {
         t_conditionalDims,
         Scalar,
         jmm::MultivariateNormal,
-        jmm::MultivariateNormal
-    >;
+        jmm::MultivariateNormal>;
     using MMCond = typename MM::ConditionalDistribution;
 
     auto distribution = MM();
     auto conditional = MMCond();
     distribution.setNComponents(t_components);
     conditional.setNComponents(t_components);
-    for(int i = 0; i < t_components; ++i) {
+    for (int i = 0; i < t_components; ++i) {
         distribution.weights()[i] = 1.f / 64.f;
         distribution.components()[i].set(
-            MM::Vectord::Ones(),
-            MM::Matrixd::Identity()
-        );
+            MM::Vectord::Ones(), MM::Matrixd::Identity());
     }
     distribution.configure();
 
@@ -54,7 +51,7 @@ void conditioning_jmm(benchmark::State &state) {
     Scalar heuristicWeight;
     float pdf_sum = 0;
     float n_repetitions = 0;
-    for(auto _ : state) {
+    for (auto _ : state) {
         distribution.conditional(point, conditional, heuristicWeight);
         pdf_sum += conditional.pdf(query);
         n_repetitions++;
@@ -62,7 +59,7 @@ void conditioning_jmm(benchmark::State &state) {
     // spdlog::info(pdf_sum / n_repetitions);
 }
 
-void conditioning_jmm_spatio_directional(benchmark::State &state) {
+void conditioning_jmm_spatio_directional(benchmark::State& state) {
     constexpr static int t_dims = 6;
     constexpr static int t_conditionalDims = 3;
     constexpr static int t_conditionDims = t_dims - t_conditionalDims;
@@ -76,21 +73,18 @@ void conditioning_jmm_spatio_directional(benchmark::State &state) {
         t_conditionalDims,
         Scalar,
         jmm::MultivariateTangentNormal,
-        jmm::MultivariateNormal
-    >;
+        jmm::MultivariateNormal>;
     using MMCond = typename MM::ConditionalDistribution;
 
     auto distribution = MM();
     auto conditional = MMCond();
     distribution.setNComponents(t_components);
     conditional.setNComponents(t_components);
-    MM::Vectord mean; mean << 1, 1, 1, 1, 0, 0;
-    for(int i = 0; i < t_components; ++i) {
+    MM::Vectord mean;
+    mean << 1, 1, 1, 1, 0, 0;
+    for (int i = 0; i < t_components; ++i) {
         distribution.weights()[i] = 1.f / 64.f;
-        distribution.components()[i].set(
-            mean,
-            MM::Matrixd::Identity()
-        );
+        distribution.components()[i].set(mean, MM::Matrixd::Identity());
     }
     distribution.configure();
 
@@ -101,9 +95,10 @@ void conditioning_jmm_spatio_directional(benchmark::State &state) {
     float mean_n_comp = 0;
     float n_repetitions = 0;
     int query_i = 0;
-    for(auto _ : state) {
+    for (auto _ : state) {
         distribution.conditional(point, conditional, heuristicWeight);
-        typename MM::ConditionalVectord query({query_i % 3, (query_i + 1) % 3, (query_i + 2) % 3});
+        typename MM::ConditionalVectord query(
+            {query_i % 3, (query_i + 1) % 3, (query_i + 2) % 3});
         // distribution.conditional(point, conditional, heuristicWeight);
         // mean_n_comp += conditional.nComponents();
         pdf = conditional.pdf(query);
@@ -120,8 +115,8 @@ void conditioning_jmm_spatio_directional(benchmark::State &state) {
 BENCHMARK(conditioning_jmm_spatio_directional);
 #endif
 
-template<size_t PacketSize>
-void conditioning(benchmark::State &state) {
+template <size_t PacketSize>
+void conditioning(benchmark::State& state) {
     constexpr static size_t JointSize = 5;
     constexpr static size_t MarginalSize = 3;
     constexpr static size_t ConditionalSize = 2;
@@ -130,34 +125,32 @@ void conditioning(benchmark::State &state) {
     using Packet = enoki::Packet<Scalar, PacketSize>;
     using Value = enoki::DynamicArray<Packet>;
     using JointTangentSpace = sdmm::EuclidianTangentSpace<
-        sdmm::Vector<Value, JointSize>, sdmm::Vector<Value, JointSize>
-    >;
-    using JointSDMM = sdmm::SDMM<
-        sdmm::Matrix<Value, JointSize>, JointTangentSpace
-    >;
+        sdmm::Vector<Value, JointSize>,
+        sdmm::Vector<Value, JointSize>>;
+    using JointSDMM =
+        sdmm::SDMM<sdmm::Matrix<Value, JointSize>, JointTangentSpace>;
     using MarginalTangentSpace = sdmm::EuclidianTangentSpace<
-        sdmm::Vector<Value, MarginalSize>, sdmm::Vector<Value, MarginalSize>
-    >;
-    using MarginalSDMM = sdmm::SDMM<
-        sdmm::Matrix<Value, MarginalSize>, MarginalTangentSpace
-    >;
+        sdmm::Vector<Value, MarginalSize>,
+        sdmm::Vector<Value, MarginalSize>>;
+    using MarginalSDMM =
+        sdmm::SDMM<sdmm::Matrix<Value, MarginalSize>, MarginalTangentSpace>;
     using ConditionalTangentSpace = sdmm::EuclidianTangentSpace<
-        sdmm::Vector<Value, ConditionalSize>, sdmm::Vector<Value, ConditionalSize>
-    >;
-    using ConditionalSDMM = sdmm::SDMM<
-        sdmm::Matrix<Value, ConditionalSize>, ConditionalTangentSpace
-    >;
+        sdmm::Vector<Value, ConditionalSize>,
+        sdmm::Vector<Value, ConditionalSize>>;
+    using ConditionalSDMM = sdmm::
+        SDMM<sdmm::Matrix<Value, ConditionalSize>, ConditionalTangentSpace>;
 
-    using Conditioner = sdmm::SDMMConditioner<
-        JointSDMM, MarginalSDMM, ConditionalSDMM
-    >;
+    using Conditioner =
+        sdmm::SDMMConditioner<JointSDMM, MarginalSDMM, ConditionalSDMM>;
     constexpr static size_t NComponents = 64;
 
     JointSDMM distribution;
     enoki::set_slices(distribution, NComponents);
     distribution = enoki::zero<JointSDMM>(NComponents);
-    distribution.tangent_space.mean = enoki::full<sdmm::embedded_s_t<JointSDMM>>(1, NComponents);
-    distribution.weight.pmf = enoki::full<decltype(distribution.weight.pmf)>(1.f / NComponents, NComponents);
+    distribution.tangent_space.mean =
+        enoki::full<sdmm::embedded_s_t<JointSDMM>>(1, NComponents);
+    distribution.weight.pmf = enoki::full<decltype(distribution.weight.pmf)>(
+        1.f / NComponents, NComponents);
     distribution.cov = enoki::identity<sdmm::matrix_t<JointSDMM>>(NComponents);
     assert(sdmm::prepare_vectorized(distribution) == true);
 
@@ -171,68 +164,61 @@ void conditioning(benchmark::State &state) {
     sdmm::embedded_s_t<ConditionalSDMM> query({1, 2});
     float pdf_sum = 0;
     float n_repetitions = 0;
-    sdmm::create_conditional(conditioner, point);
-    for(auto _ : state) {
+    ConditionalSDMM conditional;
+    sdmm::create_conditional(conditioner, point, conditional);
+    for (auto _ : state) {
         enoki::vectorize_safe(
             VECTORIZE_WRAP_MEMBER(pdf_gaussian),
-            conditioner.conditional,
+            conditional,
             query,
-            pdf
-        );
+            pdf);
         pdf_sum += enoki::hsum(pdf);
         n_repetitions++;
     }
-    // spdlog::info(pdf_sum / n_repetitions);
+    spdlog::info(pdf_sum / n_repetitions);
 }
 
-template<size_t PacketSize>
-void conditioning_spatio_directional(benchmark::State &state) {
+template <size_t PacketSize>
+void conditioning_spatio_directional(benchmark::State& state) {
     constexpr static size_t JointSize = 5;
     constexpr static size_t MarginalSize = 3;
     constexpr static size_t ConditionalSize = 2;
     static_assert(JointSize == MarginalSize + ConditionalSize);
 
+    constexpr static size_t NComponents = 16;
     using Packet = enoki::Packet<Scalar, PacketSize>;
-    using Value = enoki::DynamicArray<Packet>;
+    using Value = enoki::Array<Packet, NComponents>;
     using JointTangentSpace = sdmm::SpatioDirectionalTangentSpace<
-        sdmm::Vector<Value, JointSize + 1>, sdmm::Vector<Value, JointSize>
-    >;
-    using JointSDMM = sdmm::SDMM<
-        sdmm::Matrix<Value, JointSize>, JointTangentSpace
-    >;
+        sdmm::Vector<Value, JointSize + 1>,
+        sdmm::Vector<Value, JointSize>>;
+    using JointSDMM =
+        sdmm::SDMM<sdmm::Matrix<Value, JointSize>, JointTangentSpace>;
     using MarginalTangentSpace = sdmm::EuclidianTangentSpace<
-        sdmm::Vector<Value, MarginalSize>, sdmm::Vector<Value, MarginalSize>
-    >;
-    using MarginalSDMM = sdmm::SDMM<
-        sdmm::Matrix<Value, MarginalSize>, MarginalTangentSpace
-    >;
+        sdmm::Vector<Value, MarginalSize>,
+        sdmm::Vector<Value, MarginalSize>>;
+    using MarginalSDMM =
+        sdmm::SDMM<sdmm::Matrix<Value, MarginalSize>, MarginalTangentSpace>;
     using ConditionalTangentSpace = sdmm::DirectionalTangentSpace<
-        sdmm::Vector<Value, ConditionalSize + 1>, sdmm::Vector<Value, ConditionalSize>
-    >;
-    using ConditionalSDMM = sdmm::SDMM<
-        sdmm::Matrix<Value, ConditionalSize>, ConditionalTangentSpace
-    >;
+        sdmm::Vector<Value, ConditionalSize + 1>,
+        sdmm::Vector<Value, ConditionalSize>>;
+    using ConditionalSDMM = sdmm::
+        SDMM<sdmm::Matrix<Value, ConditionalSize>, ConditionalTangentSpace>;
 
-    using Conditioner = sdmm::SDMMConditioner<
-        JointSDMM, MarginalSDMM, ConditionalSDMM
-    >;
-    constexpr static size_t NComponents = 64;
+    using Conditioner =
+        sdmm::SDMMConditioner<JointSDMM, MarginalSDMM, ConditionalSDMM>;
 
     JointSDMM distribution;
     enoki::set_slices(distribution, NComponents);
     distribution = enoki::zero<JointSDMM>(NComponents);
-    distribution.tangent_space.set_mean(
-        sdmm::embedded_t<JointSDMM>{
+    distribution.tangent_space.set_mean(sdmm::embedded_t<JointSDMM>{
         enoki::full<Value>(1, NComponents),
         enoki::full<Value>(1, NComponents),
         enoki::full<Value>(1, NComponents),
         enoki::full<Value>(1, NComponents),
         enoki::full<Value>(0, NComponents),
-        enoki::full<Value>(0, NComponents)
-        }
-    );
-    distribution.weight.pmf =
-        enoki::full<decltype(distribution.weight.pmf)>(1.f / NComponents, NComponents);
+        enoki::full<Value>(0, NComponents)});
+    distribution.weight.pmf = enoki::full<decltype(distribution.weight.pmf)>(
+        1.f / NComponents, NComponents);
     distribution.cov = enoki::identity<sdmm::matrix_t<JointSDMM>>(NComponents);
     assert(sdmm::prepare_vectorized(distribution) == true);
 
@@ -248,15 +234,20 @@ void conditioning_spatio_directional(benchmark::State &state) {
     float pdf_sum = 0;
     float n_repetitions = 0;
     int query_i = 0;
-    for(auto _ : state) {
-        sdmm::create_conditional(conditioner, point);
-        sdmm::embedded_s_t<ConditionalSDMM>{Scalar(query_i % 3), Scalar((query_i + 1) % 3), Scalar((query_i + 2) % 3)};
-        enoki::vectorize_safe(
-            VECTORIZE_WRAP_MEMBER(posterior),
-            conditioner.conditional,
-            query,
-            pdf
-        );
+
+    ConditionalSDMM conditional;
+    enoki::set_slices(conditional, enoki::slices(distribution));
+    for (auto _ : state) {
+        sdmm::create_conditional_static(conditioner, point, conditional);
+        sdmm::embedded_s_t<ConditionalSDMM>{
+            Scalar(query_i % 3),
+            Scalar((query_i + 1) % 3),
+            Scalar((query_i + 2) % 3)};
+        // enoki::vectorize_safe(
+        //     VECTORIZE_WRAP_MEMBER(posterior),
+        //     conditional,
+        //     query,
+        //     pdf);
         pdf_hsum = enoki::hsum_nested(pdf);
 
         benchmark::DoNotOptimize(pdf_sum += pdf_hsum);

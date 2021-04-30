@@ -6,11 +6,14 @@ namespace sdmm::linalg {
 
 // Taken from Mitsuba2:
 template <typename Value_, size_t Size_>
-struct Vector : enoki::StaticArrayImpl<Value_, Size_, false, Vector<Value_, Size_>> {
-    using Base = enoki::StaticArrayImpl<Value_, Size_, false, Vector<Value_, Size_>>;
+struct Vector
+    : enoki::StaticArrayImpl<Value_, Size_, false, Vector<Value_, Size_>> {
+    using Base =
+        enoki::StaticArrayImpl<Value_, Size_, false, Vector<Value_, Size_>>;
 
     /// Helper alias used to implement type promotion rules
-    template <typename T> using ReplaceValue = Vector<T, Size_>;
+    template <typename T>
+    using ReplaceValue = Vector<T, Size_>;
 
     using ArrayType = Vector;
     using MaskType = enoki::Mask<Value_, Size_>;
@@ -20,4 +23,4 @@ struct Vector : enoki::StaticArrayImpl<Value_, Size_, false, Vector<Value_, Size
     ENOKI_ARRAY_IMPORT(Base, Vector)
 };
 
-}
+} // namespace sdmm::linalg

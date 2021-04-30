@@ -5,18 +5,18 @@
 
 namespace sdmm::linalg {
 
-template<typename Scalar, int Size>
+template <typename Scalar, int Size>
 struct AABB {
     using Point = sdmm::Vector<Scalar, Size>;
 
     AABB() {}
-    AABB(Point min_, Point max_) : min(min_), max(max_) { }
+    AABB(Point min_, Point max_) : min(min_), max(max_) {}
     AABB(const AABB& other) = default;
     AABB(AABB&& other) = default;
     AABB& operator=(const AABB& other) = default;
     AABB& operator=(AABB&& other) = default;
 
-    template<typename PointIn>
+    template <typename PointIn>
     auto contains(const PointIn& point) const -> bool {
         bool result = enoki::all(point > min) && enoki::all(point < max);
         return result;
@@ -32,4 +32,4 @@ struct AABB {
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(AABB, min, max);
 };
 
-}
+} // namespace sdmm::linalg

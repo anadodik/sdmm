@@ -7,11 +7,10 @@
 
 namespace sdmm {
 
-template<typename Embedded_, typename Tangent_>
+template <typename Embedded_, typename Tangent_>
 struct OffsetDirectionalTangentSpace {
     static_assert(
-        std::is_same_v<enoki::scalar_t<Embedded_>, enoki::scalar_t<Tangent_>>
-    );
+        std::is_same_v<enoki::scalar_t<Embedded_>, enoki::scalar_t<Tangent_>>);
     static_assert(Embedded_::Size == 3 && Tangent_::Size == 2);
 
     using Scalar = enoki::value_t<Embedded_>;
@@ -37,8 +36,9 @@ struct OffsetDirectionalTangentSpace {
     constexpr static bool IsEuclidian = false;
     constexpr static bool HasTangentSpaceOffset = true;
 
-    template<typename EmbeddedIn>
-    auto to(const EmbeddedIn& embedded, ScalarExpr& inv_jacobian) const -> TangentExpr {
+    template <typename EmbeddedIn>
+    auto to(const EmbeddedIn& embedded, ScalarExpr& inv_jacobian) const
+        -> TangentExpr {
         constexpr static ScalarS cos_angle_min = -0.98;
 
         const EmbeddedExpr embedded_local = coordinate_system.to * embedded;
@@ -46,23 +46,22 @@ struct OffsetDirectionalTangentSpace {
         // assert(enoki::all(cos_angle >= -1));
 
         const ScalarExpr angle = enoki::safe_acos(cos_angle);
-        const ScalarExpr sin_angle = enoki::safe_sqrt(1 - cos_angle * cos_angle);
-        const ScalarExpr rcp_sinc_angle = enoki::select(
-            sin_angle < 1e-4,
-            ScalarExpr(1),
-            angle / sin_angle
-        );
+        const ScalarExpr sin_angle =
+            enoki::safe_sqrt(1 - cos_angle * cos_angle);
+        const ScalarExpr rcp_sinc_angle =
+            enoki::select(sin_angle < 1e-4, ScalarExpr(1), angle / sin_angle);
 
-        inv_jacobian = enoki::select(cos_angle < cos_angle_min, 0, rcp_sinc_angle);
+        inv_jacobian =
+            enoki::select(cos_angle < cos_angle_min, 0, rcp_sinc_angle);
 
         return TangentExpr{
             embedded_local.x() * rcp_sinc_angle - tangent_mean.x(),
-            embedded_local.y() * rcp_sinc_angle - tangent_mean.y()
-        };
+            embedded_local.y() * rcp_sinc_angle - tangent_mean.y()};
     }
 
-    template<typename TangentIn>
-    auto from(const TangentIn& tangent, ScalarExpr& inv_jacobian) const -> EmbeddedExpr {
+    template <typename TangentIn>
+    auto from(const TangentIn& tangent, ScalarExpr& inv_jacobian) const
+        -> EmbeddedExpr {
         constexpr static ScalarS max_length = M_PI - 1e-1;
 
         TangentExpr tangent_offset = tangent + tangent_mean;
@@ -71,15 +70,13 @@ struct OffsetDirectionalTangentSpace {
         const ScalarExpr sinc_angle = enoki::select(
             (sin_angle < 1e-2) || length > max_length,
             ScalarExpr(1),
-            sin_angle / length
-        );
+            sin_angle / length);
         inv_jacobian = enoki::select(length > max_length, 0, sinc_angle);
 
         const EmbeddedExpr embedded_local{
             tangent_offset.x() * sinc_angle,
             tangent_offset.y() * sinc_angle,
-            cos_angle
-        };
+            cos_angle};
 
         return coordinate_system.from * embedded_local;
     }
@@ -92,10 +89,15 @@ struct OffsetDirectionalTangentSpace {
     auto rotate_to_wo(const EmbeddedS& wi) -> void {
         ScalarS neg_phi = -std::atan2(wi.y(), wi.x());
         MatrixS rotation(
-            std::cos(neg_phi), -std::sin(neg_phi), 0,
-            std::sin(neg_phi), std::cos(neg_phi), 0,
-            0, 0, 1
-        );
+            std::cos(neg_phi),
+            -std::sin(neg_phi),
+            0,
+            std::sin(neg_phi),
+            std::cos(neg_phi),
+            0,
+            0,
+            0,
+            1);
         MatrixS inv_rotation = linalg::transpose(rotation);
         coordinate_system.to = coordinate_system.to * rotation;
         coordinate_system.from = inv_rotation * coordinate_system.from;
@@ -118,21 +120,18 @@ struct OffsetDirectionalTangentSpace {
         return coordinate_system.from * jacobian;
     }
 
-    template<typename EmbeddedIn>
-    auto to_jacobian(
-        const EmbeddedIn& embedded
-    ) const -> std::pair<TangentExpr, sdmm::Matrix<ScalarExpr, 2, 3>> {
+    template <typename EmbeddedIn>
+    auto to_jacobian(const EmbeddedIn& embedded) const
+        -> std::pair<TangentExpr, sdmm::Matrix<ScalarExpr, 2, 3>> {
         ScalarExpr inv_jacobian;
         return to_jacobian(embedded, inv_jacobian);
     }
 
     // Calculates the Jacobian matrix approximation for the transformation
     // \exp_{\mu} ( \vec{x} )
-    template<typename EmbeddedIn>
-    auto to_jacobian(
-        const EmbeddedIn& embedded,
-        ScalarExpr& inv_jacobian
-    ) const -> std::pair<TangentExpr, sdmm::Matrix<ScalarExpr, 2, 3>> {
+    template <typename EmbeddedIn>
+    auto to_jacobian(const EmbeddedIn& embedded, ScalarExpr& inv_jacobian) const
+        -> std::pair<TangentExpr, sdmm::Matrix<ScalarExpr, 2, 3>> {
         using Jacobian = sdmm::Matrix<ScalarExpr, 2, 3>;
         Jacobian jacobian;
 
@@ -145,8 +144,7 @@ struct OffsetDirectionalTangentSpace {
         const ScalarExpr rcp_sinc_angle = enoki::select(
             sin_angle < 1e-2 || cos_angle < -0.99,
             ScalarExpr(1),
-            angle / sin_angle
-        );
+            angle / sin_angle);
         inv_jacobian = enoki::select(cos_angle <= -0.99, 0, rcp_sinc_angle);
 
         jacobian(0, 0) = rcp_sinc_angle;
@@ -156,11 +154,9 @@ struct OffsetDirectionalTangentSpace {
         jacobian(1, 0) = enoki::zero<ScalarExpr>(enoki::slices(rcp_sinc_angle));
 
         ScalarExpr inv_sin_angle_sqr = enoki::select(
-            sin_angle < 1e-2 || cos_angle < -0.99,
-            0,
-            1 / sin_angle_sqr
-        );
-        ScalarExpr temp_expr = (cos_angle * rcp_sinc_angle - 1) * inv_sin_angle_sqr;
+            sin_angle < 1e-2 || cos_angle < -0.99, 0, 1 / sin_angle_sqr);
+        ScalarExpr temp_expr =
+            (cos_angle * rcp_sinc_angle - 1) * inv_sin_angle_sqr;
         jacobian(0, 2) = embedded_local.coeff(0) * temp_expr;
         jacobian(1, 2) = embedded_local.coeff(1) * temp_expr;
 
@@ -168,18 +164,16 @@ struct OffsetDirectionalTangentSpace {
 
         TangentExpr tangent{
             embedded_local.x() * rcp_sinc_angle - tangent_mean.x(),
-            embedded_local.y() * rcp_sinc_angle - tangent_mean.y()
-        };
+            embedded_local.y() * rcp_sinc_angle - tangent_mean.y()};
 
         return {tangent, jacobian};
     }
 
     // Calculates the Jacobian matrix approximation for the transformation
     // \log_{\mu} ( \vec{t} )
-    template<typename TangentIn>
-    auto from_jacobian(
-        const TangentIn& tangent
-    ) const -> std::pair<EmbeddedExpr, sdmm::Matrix<ScalarExpr, 3, 2>> {
+    template <typename TangentIn>
+    auto from_jacobian(const TangentIn& tangent) const
+        -> std::pair<EmbeddedExpr, sdmm::Matrix<ScalarExpr, 3, 2>> {
         constexpr static ScalarS cos_angle_min = -0.98;
 
         using Jacobian = sdmm::Matrix<ScalarExpr, 3, 2>;
@@ -192,37 +186,39 @@ struct OffsetDirectionalTangentSpace {
         const ScalarExpr sinc_angle = enoki::select(
             sin_angle < 1e-2 || cos_angle < cos_angle_min,
             ScalarExpr(1),
-            sin_angle / length
-        );
+            sin_angle / length);
 
         ScalarExpr cos_minus_sinc_over_length_sqr = enoki::select(
             sin_angle < 1e-2 || cos_angle < cos_angle_min,
             0,
-            (cos_angle - sinc_angle) / length_sqr
-        );
-        jacobian(0, 0) = sinc_angle + tangent_offset.coeff(0) * tangent_offset.coeff(0) * cos_minus_sinc_over_length_sqr;
-        jacobian(1, 1) = sinc_angle + tangent_offset.coeff(1) * tangent_offset.coeff(1) * cos_minus_sinc_over_length_sqr;
+            (cos_angle - sinc_angle) / length_sqr);
+        jacobian(0, 0) = sinc_angle +
+            tangent_offset.coeff(0) * tangent_offset.coeff(0) *
+                cos_minus_sinc_over_length_sqr;
+        jacobian(1, 1) = sinc_angle +
+            tangent_offset.coeff(1) * tangent_offset.coeff(1) *
+                cos_minus_sinc_over_length_sqr;
 
-        ScalarExpr off_diagonal = tangent_offset.coeff(0) * tangent_offset.coeff(1) * cos_minus_sinc_over_length_sqr;
+        ScalarExpr off_diagonal = tangent_offset.coeff(0) *
+            tangent_offset.coeff(1) * cos_minus_sinc_over_length_sqr;
         jacobian(0, 1) = off_diagonal;
         jacobian(1, 0) = off_diagonal;
 
         jacobian(2, 0) = enoki::select(
             sin_angle < 1e-2 || cos_angle < cos_angle_min,
-            0, -tangent_offset.coeff(0) * sinc_angle
-        );
+            0,
+            -tangent_offset.coeff(0) * sinc_angle);
         jacobian(2, 1) = enoki::select(
             sin_angle < 1e-2 || cos_angle < cos_angle_min,
-            0, -tangent_offset.coeff(1) * sinc_angle
-        );
+            0,
+            -tangent_offset.coeff(1) * sinc_angle);
 
         jacobian = coordinate_system.from * jacobian;
 
         const EmbeddedExpr embedded_local{
             tangent_offset.x() * sinc_angle,
             tangent_offset.y() * sinc_angle,
-            cos_angle
-        };
+            cos_angle};
 
         return {coordinate_system.from * embedded_local, jacobian};
     }
@@ -231,11 +227,17 @@ struct OffsetDirectionalTangentSpace {
     Tangent tangent_mean;
     linalg::CoordinateSystem<Embedded> coordinate_system;
 
-    ENOKI_STRUCT(OffsetDirectionalTangentSpace, mean, tangent_mean, coordinate_system);
+    ENOKI_STRUCT(
+        OffsetDirectionalTangentSpace,
+        mean,
+        tangent_mean,
+        coordinate_system);
 };
 
-template<typename Embedded, typename Tangent>
-void to_json(json& j, const OffsetDirectionalTangentSpace<Embedded, Tangent>& tangent_space) {
+template <typename Embedded, typename Tangent>
+void to_json(
+    json& j,
+    const OffsetDirectionalTangentSpace<Embedded, Tangent>& tangent_space) {
     j = json{
         {"tangent_space.mean", tangent_space.mean},
         {"tangent_space.tangent_mean", tangent_space.tangent_mean},
@@ -243,13 +245,20 @@ void to_json(json& j, const OffsetDirectionalTangentSpace<Embedded, Tangent>& ta
     };
 }
 
-template<typename Embedded, typename Tangent>
-void from_json(const json& j, OffsetDirectionalTangentSpace<Embedded, Tangent>& tangent_space) {
+template <typename Embedded, typename Tangent>
+void from_json(
+    const json& j,
+    OffsetDirectionalTangentSpace<Embedded, Tangent>& tangent_space) {
     j.at("tangent_space.mean").get_to(tangent_space.mean);
     j.at("tangent_space.tangent_mean").get_to(tangent_space.tangent_mean);
-    j.at("tangent_space.coordinate_system").get_to(tangent_space.coordinate_system);
+    j.at("tangent_space.coordinate_system")
+        .get_to(tangent_space.coordinate_system);
 }
 
-}
+} // namespace sdmm
 
-ENOKI_STRUCT_SUPPORT(sdmm::OffsetDirectionalTangentSpace, mean, tangent_mean, coordinate_system)
+ENOKI_STRUCT_SUPPORT(
+    sdmm::OffsetDirectionalTangentSpace,
+    mean,
+    tangent_mean,
+    coordinate_system)

@@ -7,7 +7,7 @@
 
 namespace sdmm {
 
-template<typename JointSDMM, typename Conditioner, typename RNG>
+template <typename JointSDMM, typename Conditioner, typename RNG>
 struct SDMMContext {
     SDMMContext() = default;
     SDMMContext(size_t data_size) {
@@ -35,4 +35,4 @@ struct SDMMContext {
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(SDMMContext, sdmm);
 };
 
-}
+} // namespace sdmm

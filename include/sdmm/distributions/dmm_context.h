@@ -7,7 +7,7 @@
 
 namespace sdmm {
 
-template<typename SDMM, typename DMM, typename RNG>
+template <typename SDMM, typename DMM, typename RNG>
 struct DMMContext {
     DMMContext() = default;
     DMMContext(size_t data_size) {
@@ -36,4 +36,4 @@ struct DMMContext {
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(DMMContext, dmm);
 };
 
-}
+} // namespace sdmm
