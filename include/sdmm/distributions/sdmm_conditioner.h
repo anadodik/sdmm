@@ -120,7 +120,7 @@ inline auto create_conditional_static(
     Conditioner& conditioner,
     typename Conditioner::MarginalEmbeddedS& point,
     typename Conditioner::Conditional& out) -> bool {
-    create_conditional_vectorized(conditioner, point, out);
+    conditioner.create_conditional_vectorized(point, out);
     bool cdf_success = out.weight.prepare();
     return cdf_success;
 }

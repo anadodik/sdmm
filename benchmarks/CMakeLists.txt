@@ -6,8 +6,8 @@ add_executable(
     benchmarks
 
     distributions.cpp
-    em.cpp
-    sampling.cpp
+    # em.cpp
+    # sampling.cpp
 )
 
 target_compile_definitions(benchmarks PRIVATE COMPARISON=0)

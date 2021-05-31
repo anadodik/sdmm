@@ -56,6 +56,8 @@ void initialize(
         enoki::full<Value>(std::numeric_limits<float>::infinity(), data.size);
     sdmm::Categorical<Value> sampling_dist;
     enoki::set_slices(data.weight, data.size);
+    // spdlog::warn("Data size={}", data.size);
+    // spdlog::warn("Data weight={}", enoki::slice(data.weight, data.size - 1));
     sampling_dist.pmf = enoki::vectorize(
         [](auto&& w) { return enoki::min(enoki::max(w, 1e-3), 3); },
         data.weight);
@@ -119,8 +121,8 @@ void initialize(
             }
         }
         if (!sampling_dist.prepare()) {
-            std::cerr << "Could not create discrete CDF for initialization, "
-                         "using uniform CDF.\n";
+            spdlog::warn("Could not create discrete CDF for initialization, "
+                         "using uniform CDF.");
             // std::cerr << fmt::format("Could not create CDF={}\n",
             // sampling_dist.pmf);
             sampling_dist.pmf = enoki::full<Value>(
@@ -285,8 +287,8 @@ void initialize_dmm(
             }
         }
         if (!sampling_dist.prepare()) {
-            std::cerr << "Could not create discrete CDF for initialization, "
-                         "using uniform CDF.\n";
+            spdlog::warn("Could not create discrete CDF for initialization, "
+                         "using uniform CDF.");
             // std::cerr << fmt::format("Could not create CDF={}\n",
             // sampling_dist.pmf);
             sampling_dist.pmf = enoki::full<Value>(

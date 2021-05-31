@@ -2,6 +2,7 @@
 
 #include <mutex>
 
+#include <sdmm/accelerators/spatial_stats.h>
 #include <sdmm/core/utils.h>
 #include <sdmm/opt/em.h>
 
@@ -9,10 +10,16 @@ namespace sdmm {
 
 template <typename SDMM, typename DMM, typename RNG>
 struct DMMContext {
-    DMMContext() = default;
+    DMMContext() {
+        data.clear();
+        training_data.clear();
+        stats.clear();
+    }
+
     DMMContext(size_t data_size) {
         data.reserve(data_size);
         training_data.reserve(data_size);
+        stats.clear();
     }
     // Copy constructor intentionally deleted.
     // This is a large data structure and should not be copied.
@@ -28,6 +35,7 @@ struct DMMContext {
     RNG rng;
 
     sdmm::Data<DMM> training_data;
+    sdmm::SpatialStats stats;
     bool update_ready = false;
     bool initialized = false;
 

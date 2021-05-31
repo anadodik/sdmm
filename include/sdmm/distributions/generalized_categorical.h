@@ -15,11 +15,13 @@ struct Categorical {
     using Value = Value_;
     using Scalar = enoki::scalar_t<Value>;
     using Mask = enoki::mask_t<Value>;
+    using ValueOuter = sdmm::outer_type_t<Value, Scalar>;
+    using BoolOuter = sdmm::outer_type_t<Value, bool>;
 
     Value pmf;
     Value cdf;
 
-    bool prepare();
+    BoolOuter prepare();
 
     ENOKI_STRUCT(Categorical, pmf, cdf);
 };
@@ -84,22 +86,22 @@ template <
 }
 
 template <typename Value_>
-[[nodiscard]] auto Categorical<Value_>::prepare() -> bool {
+[[nodiscard]] auto Categorical<Value_>::prepare() -> BoolOuter {
     size_t n_slices = enoki::slices(pmf);
     if (enoki::slices(cdf) != n_slices) {
         enoki::set_slices(cdf, n_slices);
     }
-    cdf.coeff(0) = pmf.coeff(0);
+    enoki::slice(cdf, 0) = enoki::slice(pmf, 0);
     for (size_t i = 1; i < n_slices; ++i) {
-        cdf.coeff(i) = cdf.coeff(i - 1) + pmf.coeff(i);
+        enoki::slice(cdf, i) = enoki::slice(cdf, i - 1) + enoki::slice(pmf, i);
     }
 
-    Scalar pmf_sum = cdf.coeff(n_slices - 1);
+    ValueOuter pmf_sum = enoki::slice(cdf, n_slices - 1);
     bool is_valid = pmf_sum > 1e-20f;
     if (!is_valid) {
         return is_valid;
     }
-    Scalar inv_normalizer = 1 / enoki::select(is_valid, pmf_sum, 1.f);
+    ValueOuter inv_normalizer = 1 / enoki::select(is_valid, pmf_sum, 1.f);
 
     // This can be further optimized by
     // only iterating over cdfs which have non-zero sums.

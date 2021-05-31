@@ -121,15 +121,15 @@ class DMMSTree {
     }
 
     std::pair<int, Scalar> get_split_location(int node_i) {
-        auto& data = m_nodes[node_i].value->data;
-        auto mean_point = data.mean_point;
-        auto mean_sqr_point = data.mean_sqr_point;
+        auto& stats = m_nodes[node_i].value->stats;
+        auto mean_point = stats.mean_point;
+        auto mean_sqr_point = stats.mean_sqr_point;
         auto var_point =
             (mean_sqr_point -
-             enoki::sqr(mean_point / data.stats_size) * data.stats_size) /
-            (float)(data.stats_size - 1);
-        mean_point /= (float)data.stats_size;
-        mean_sqr_point /= (float)data.stats_size;
+             enoki::sqr(mean_point / stats.size) * stats.size) /
+            (float)(stats.size - 1);
+        mean_point /= (float)stats.size;
+        mean_sqr_point /= (float)stats.size;
 
         size_t max_var_i = 0;
         for (size_t var_i = 0; var_i < 3; ++var_i) {
@@ -191,6 +191,7 @@ class DMMSTree {
             if (child.aabb.contains(point)) {
                 childValue->data.push_back(
                     enoki::slice(m_nodes[node_i].value->data, sample_i));
+                childValue->stats.push_back(point);
             }
         }
         child.value = std::move(childValue);
@@ -274,7 +275,7 @@ class DMMSTree {
             return;
         }
 
-        if (m_nodes[node_i].value->data.stats_size > split_threshold) {
+        if (m_nodes[node_i].value->stats.size > split_threshold) {
             // m_nodes[node_i].data_aabb = AABB(
             //     m_nodes[node_i].value->data.min_position,
             //     m_nodes[node_i].value->data.max_position
@@ -293,7 +294,7 @@ class DMMSTree {
                 m_nodes.push_back(std::move(child));
                 m_nodes[node_i].children[child_i] = child_idx;
             }
-            m_nodes[node_i].value->data.clear_stats();
+            m_nodes[node_i].value->stats.clear();
             m_nodes[node_i].value->data.clear();
             m_nodes[node_i].value = nullptr;
             for (int child_i = 0; child_i < 2; ++child_i) {
