@@ -86,7 +86,7 @@ class STree {
         Point diagonal = m_aabb.diagonal();
         m_aabb.max = m_aabb.min + enoki::full<Point>(enoki::hmax(diagonal));
 
-        m_nodes.resize(32000);
+        m_nodes.resize(64000);
         m_nodes[0].aabb = m_aabb;
         m_nodes[0].value = std::move(value);
         m_nodes[0].depth = 0;
@@ -126,7 +126,7 @@ class STree {
         auto& stats = m_nodes[node_i].value->stats;
         auto mean_point = stats.mean_point();
         auto mean_sqr_point = stats.mean_sqr_point();
-        float stats_size = (float)stats.size;
+        float stats_size = (float) stats.size;
         auto var_point = (mean_sqr_point -
                           enoki::sqr(mean_point / stats_size) * stats_size) /
             (float)(stats_size - 1);
@@ -143,13 +143,6 @@ class STree {
 
         Point aabb_min = m_nodes[node_i].aabb.min;
         Point aabb_diagonal = m_nodes[node_i].aabb.diagonal();
-        // std::cerr <<
-        //     "var=" << var_point <<
-        //     ", mean=" << mean_point <<
-        //     ", data size=" << stats.size <<
-        //     ", aabb_min=" << aabb_min <<
-        //     ", aabb_diag=" << aabb_diagonal <<
-        //     "\n";
         Scalar location =
             (mean_point.coeff(max_var_i) - aabb_min.coeff(max_var_i)) /
             aabb_diagonal.coeff(max_var_i);
@@ -296,8 +289,6 @@ struct adl_serializer<sdmm::accelerators::STreeNode<Scalar, Size, Value>> {
             {"depth", node.depth}};
     }
 
-    // NLOHMANN_DEFINE_TYPE_INTRUSIVE(STreeNode, is_leaf, axis, idx, children,
-    // value, aabb, depth);
     static STreeNode from_json(const json& j) {
         STreeNode node;
         j.at("is_leaf").get_to(node.is_leaf);
