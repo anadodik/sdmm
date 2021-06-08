@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <vector>
 
 #include <sdmm/core/utils.h>
@@ -85,10 +86,11 @@ class STree {
         Point diagonal = m_aabb.diagonal();
         m_aabb.max = m_aabb.min + enoki::full<Point>(enoki::hmax(diagonal));
 
-        m_nodes.reserve(10000);
-        m_nodes.emplace_back();
+        m_nodes.resize(32000);
         m_nodes[0].aabb = m_aabb;
         m_nodes[0].value = std::move(value);
+        m_nodes[0].depth = 0;
+        m_nodes_end.store(1);
     }
 
     Value* find(const Point& point) const {
@@ -105,11 +107,11 @@ class STree {
     }
 
     auto end() {
-        return m_nodes.end();
+        return *m_nodes[m_nodes_end.load()];
     }
 
     auto size() {
-        return m_nodes.size();
+        return m_nodes_end.load();
     }
 
     const auto& data() {
@@ -124,10 +126,9 @@ class STree {
         auto& stats = m_nodes[node_i].value->stats;
         auto mean_point = stats.mean_point();
         auto mean_sqr_point = stats.mean_sqr_point();
-        float stats_size = (float) stats.size;
-        auto var_point =
-            (mean_sqr_point -
-             enoki::sqr(mean_point / stats_size) * stats_size) /
+        float stats_size = (float)stats.size;
+        auto var_point = (mean_sqr_point -
+                          enoki::sqr(mean_point / stats_size) * stats_size) /
             (float)(stats_size - 1);
         mean_point /= stats_size;
         mean_sqr_point /= stats_size;
@@ -202,27 +203,17 @@ class STree {
     }
 
     void split_to_depth(int max_depth) {
-        split_to_depth_recurse(0, 0, max_depth, 0);
+        split_to_depth_recurse(0, 0, max_depth);
     }
 
-    void split_to_depth_recurse(
-        uint32_t node_i,
-        int depth,
-        int max_depth,
-        int recursion_depth) {
-        // std::cerr << "Nodes size: " << m_nodes.size() << ", depth: " << depth
-        // << "\n";
-
+    void split_to_depth_recurse(uint32_t node_i, int depth, int max_depth) {
         int max_axis = (depth == 0) ? Size : 3;
         int next_depth =
             (m_nodes[node_i].axis == max_axis - 1) ? (depth + 1) : depth;
         if (!m_nodes[node_i].is_leaf) {
             for (int child_i = 0; child_i < 2; ++child_i) {
                 split_to_depth_recurse(
-                    m_nodes[node_i].children[child_i],
-                    next_depth,
-                    max_depth,
-                    recursion_depth + 1);
+                    m_nodes[node_i].children[child_i], next_depth, max_depth);
             }
             return;
         }
@@ -233,16 +224,11 @@ class STree {
 
         m_nodes[node_i].is_leaf = false;
         for (int child_i = 0; child_i < 2; ++child_i) {
-            // m_nodes[node_i].data_aabb = m_nodes[node_i].aabb;
-            // Create node
-            Node child = create_child(node_i, child_i, 0.5);
-
-            // Insert child into vector
-            uint32_t child_idx = m_nodes.size();
-            child.idx = child_idx;
-            child.depth = recursion_depth;
-
-            m_nodes.push_back(std::move(child));
+            // Insert new child into vector
+            uint16_t child_idx = m_nodes_end.fetch_add(1);
+            m_nodes[child_idx] = create_child(node_i, child_i, 0.5);
+            m_nodes[child_idx].idx = child_idx;
+            m_nodes[child_idx].depth = m_nodes[node_i].depth + 1;
             m_nodes[node_i].children[child_i] = child_idx;
         }
 
@@ -254,62 +240,40 @@ class STree {
 
         for (int child_i = 0; child_i < 2; ++child_i) {
             int child_idx = m_nodes[node_i].children[child_i];
-            split_to_depth_recurse(
-                child_idx, next_depth, max_depth, recursion_depth + 1);
+            split_to_depth_recurse(child_idx, next_depth, max_depth);
         }
     }
 
-    void split(size_t split_threshold) {
-        split_recurse(0, split_threshold, 0);
-    }
-
-    void split_recurse(
-        uint32_t node_i,
-        size_t split_threshold,
-        int recursion_depth) {
-        if (!m_nodes[node_i].is_leaf) {
-            for (int child_i = 0; child_i < 2; ++child_i) {
-                split_recurse(
-                    m_nodes[node_i].children[child_i],
-                    split_threshold,
-                    recursion_depth + 1);
-            }
+    void split_leaf_recurse(uint32_t node_i, size_t split_threshold) {
+        if (!m_nodes[node_i].is_leaf ||
+            m_nodes[node_i].value->stats.size <= split_threshold) {
             return;
         }
 
-        if (m_nodes[node_i].value->stats.size > split_threshold) {
-            // m_nodes[node_i].data_aabb = AABB(
-            //     m_nodes[node_i].value->data.min_position,
-            //     m_nodes[node_i].value->data.max_position
-            // );
-
-            m_nodes[node_i].is_leaf = false;
-            std::pair<int, Scalar> split = get_split_location(node_i);
-            m_nodes[node_i].axis = split.first;
-            for (int child_i = 0; child_i < 2; ++child_i) {
-                Node child = create_child(node_i, child_i, split.second);
-
-                // Insert child into vector
-                uint32_t child_idx = m_nodes.size();
-                child.idx = child_idx;
-                child.depth = recursion_depth;
-                m_nodes.push_back(std::move(child));
-                m_nodes[node_i].children[child_i] = child_idx;
-            }
-            m_nodes[node_i].value->stats.clear();
-            m_nodes[node_i].value->data.clear();
-            m_nodes[node_i].value = nullptr;
-            for (int child_i = 0; child_i < 2; ++child_i) {
-                int child_idx = m_nodes[node_i].children[child_i];
-                split_recurse(child_idx, split_threshold, recursion_depth + 1);
-            }
+        m_nodes[node_i].is_leaf = false;
+        std::pair<int, Scalar> split = get_split_location(node_i);
+        m_nodes[node_i].axis = split.first;
+        for (int child_i = 0; child_i < 2; ++child_i) {
+            // Insert new child into vector
+            uint16_t child_idx = m_nodes_end.fetch_add(1);
+            m_nodes[child_idx] = create_child(node_i, child_i, split.second);
+            m_nodes[child_idx].idx = child_idx;
+            m_nodes[child_idx].depth = m_nodes[node_i].depth + 1;
+            m_nodes[node_i].children[child_i] = child_idx;
         }
-        // std::cerr << "Split node " << idx << ", children ids = " <<
-        // children[0] << ", " << children[1] << std::endl;
+        m_nodes[node_i].value->stats.clear();
+        m_nodes[node_i].value->data.clear();
+        m_nodes[node_i].value = nullptr;
+        for (int child_i = 0; child_i < 2; ++child_i) {
+            int child_idx = m_nodes[node_i].children[child_i];
+            split_leaf_recurse(child_idx, split_threshold);
+        }
     }
 
    private:
     std::vector<Node> m_nodes;
+    std::atomic<uint16_t> m_nodes_end;
+
     AABB m_aabb;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(STree, m_nodes, m_aabb);
