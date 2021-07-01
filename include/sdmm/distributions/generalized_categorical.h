@@ -11,7 +11,7 @@
 namespace sdmm {
 
 template <typename Value_>
-struct Categorical {
+struct GeneralizedCategorical {
     using Value = Value_;
     using Scalar = enoki::scalar_t<Value>;
     using Mask = enoki::mask_t<Value>;
@@ -23,19 +23,23 @@ struct Categorical {
 
     BoolOuter prepare();
 
-    ENOKI_STRUCT(Categorical, pmf, cdf);
+
+    template <typename RNG>
+    auto sample(RNG& rng) -> typename RNG::UInt32;
+
+    ENOKI_STRUCT(GeneralizedCategorical, pmf, cdf);
 };
 
-template <typename Categorical, typename RNG>
-auto sample(Categorical& distribution, RNG& rng) -> typename RNG::UInt32 {
+template <typename Value_>
+template <typename RNG>
+auto GeneralizedCategorical<Value_>::sample(RNG& rng) -> typename RNG::UInt32 {
     auto weight_inv_sample = rng.next_float32();
-    using Float32 = typename RNG::Float32;
     using UInt32 = typename RNG::UInt32;
     UInt32 idx = enoki::binary_search(
-        0, enoki::slices(distribution.cdf) - 1, [&](UInt32 index) {
-            return distribution.cdf[index] < weight_inv_sample;
+        0, enoki::slices(cdf) - 1, [&](UInt32 index) {
+            return cdf[index] < weight_inv_sample;
         });
-    while (idx > 0 && distribution.pmf[idx] == 0) {
+    while (idx > 0 && pmf[idx] == 0) {
         --idx;
     }
     return idx;
@@ -44,23 +48,23 @@ auto sample(Categorical& distribution, RNG& rng) -> typename RNG::UInt32 {
 template <
     typename Value_,
     std::enable_if_t<
-        enoki::is_array_v<typename Categorical<Value_>::BoolOuter>,
+        enoki::is_array_v<typename GeneralizedCategorical<Value_>::BoolOuter>,
         int> = 0>
-[[nodiscard]] auto is_valid(const Categorical<Value_>& categorical) ->
-    typename Categorical<Value_>::BoolOuter {
-    using CategoricalV = Categorical<Value_>;
-    const typename CategoricalV::Mask zero_values =
+[[nodiscard]] auto is_valid(const GeneralizedCategorical<Value_>& categorical) ->
+    typename GeneralizedCategorical<Value_>::BoolOuter {
+    using GeneralizedCategoricalV = GeneralizedCategorical<Value_>;
+    const typename GeneralizedCategoricalV::Mask zero_values =
         enoki::neq(categorical.pmf, 0.f);
-    typename CategoricalV::BoolOuter valid_pmf = false;
+    typename GeneralizedCategoricalV::BoolOuter valid_pmf = false;
     for (size_t i = 0;
-         i < enoki::array_size_v<typename CategoricalV::BoolOuter>;
+         i < enoki::array_size_v<typename GeneralizedCategoricalV::BoolOuter>;
          ++i) {
         valid_pmf.coeff(i) = enoki::any(zero_values.coeff(i));
     }
     if (!enoki::all(valid_pmf)) {
-        enoki::bool_array_t<typename CategoricalV::BoolOuter> bool_array =
+        enoki::bool_array_t<typename GeneralizedCategoricalV::BoolOuter> bool_array =
             valid_pmf;
-        spdlog::warn("Categorical::is_valid()={}.", bool_array);
+        spdlog::warn("GeneralizedCategorical::is_valid()={}.", bool_array);
     }
     return valid_pmf;
 }
@@ -68,25 +72,26 @@ template <
 template <
     typename Value_,
     std::enable_if_t<
-        !enoki::is_array_v<typename Categorical<Value_>::BoolOuter>,
+        !enoki::is_array_v<typename GeneralizedCategorical<Value_>::BoolOuter>,
         int> = 0>
-[[nodiscard]] auto is_valid(const Categorical<Value_>& categorical) ->
-    typename Categorical<Value_>::BoolOuter {
-    using CategoricalV = Categorical<Value_>;
-    const typename CategoricalV::Mask zero_values =
+[[nodiscard]] auto is_valid(const GeneralizedCategorical<Value_>& categorical) ->
+    typename GeneralizedCategorical<Value_>::BoolOuter {
+    using GeneralizedCategoricalV = GeneralizedCategorical<Value_>;
+    const typename GeneralizedCategoricalV::Mask zero_values =
         enoki::neq(categorical.pmf, 0.f);
-    typename CategoricalV::BoolOuter valid_pmf = false;
+    typename GeneralizedCategoricalV::BoolOuter valid_pmf = false;
     valid_pmf = enoki::any(zero_values);
     if (!enoki::all(valid_pmf)) {
-        enoki::bool_array_t<typename CategoricalV::BoolOuter> bool_array =
+        enoki::bool_array_t<typename GeneralizedCategoricalV::BoolOuter> bool_array =
             valid_pmf;
-        spdlog::warn("Categorical::is_valid()={}.", bool_array);
+        spdlog::warn("GeneralizedCategorical::is_valid()={}.", bool_array);
     }
     return valid_pmf;
 }
 
+
 template <typename Value_>
-[[nodiscard]] auto Categorical<Value_>::prepare() -> BoolOuter {
+[[nodiscard]] auto GeneralizedCategorical<Value_>::prepare() -> BoolOuter {
     size_t n_slices = enoki::slices(pmf);
     if (enoki::slices(cdf) != n_slices) {
         enoki::set_slices(cdf, n_slices);
@@ -97,8 +102,8 @@ template <typename Value_>
     }
 
     ValueOuter pmf_sum = enoki::slice(cdf, n_slices - 1);
-    bool is_valid = pmf_sum > 1e-20f;
-    if (!is_valid) {
+    BoolOuter is_valid = pmf_sum > 1e-20f;
+    if (!enoki::any(is_valid)) {
         return is_valid;
     }
     ValueOuter inv_normalizer = 1 / enoki::select(is_valid, pmf_sum, 1.f);
@@ -117,4 +122,4 @@ template <typename Value_>
 
 } // namespace sdmm
 
-ENOKI_STRUCT_SUPPORT(sdmm::Categorical, pmf, cdf);
+ENOKI_STRUCT_SUPPORT(sdmm::GeneralizedCategorical, pmf, cdf);

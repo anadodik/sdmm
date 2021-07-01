@@ -27,7 +27,6 @@ struct Categorical {
 template <typename Categorical, typename RNG>
 auto sample(Categorical& distribution, RNG& rng) -> typename RNG::UInt32 {
     auto weight_inv_sample = rng.next_float32();
-    using Float32 = typename RNG::Float32;
     using UInt32 = typename RNG::UInt32;
     UInt32 idx = enoki::binary_search(
         0, enoki::slices(distribution.cdf) - 1, [&](UInt32 index) {
@@ -96,10 +95,7 @@ template <typename Value_>
 
     Scalar pmf_sum = cdf.coeff(n_slices - 1);
     bool is_valid = pmf_sum > 1e-20f;
-    if (!is_valid) {
-        return is_valid;
-    }
-    Scalar inv_normalizer = 1 / enoki::select(is_valid, pmf_sum, 1.f);
+    Scalar inv_normalizer = 1.f / (is_valid ? pmf_sum : 1.f);
 
     // This can be further optimized by
     // only iterating over cdfs which have non-zero sums.

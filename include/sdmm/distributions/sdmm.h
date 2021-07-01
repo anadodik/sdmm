@@ -82,8 +82,8 @@ struct SDMM {
 
     using Packet = nested_packet_t<Scalar>;
 
-    auto prepare_cov() -> MaskExpr;
-    auto prepare() -> MaskExpr;
+    auto prepare_cov() -> void;
+    auto prepare() -> void;
 
     template <
         typename RNG,
@@ -161,39 +161,34 @@ void from_json(const json& j, SDMM<Matrix, TangentSpace>& sdmm) {
 }
 
 template <typename SDMM>
-[[nodiscard]] inline auto prepare_vectorized(SDMM& distribution) {
-    typename SDMM::Mask cov_success;
+[[nodiscard]] inline auto prepare_vectorized(SDMM& distribution) -> bool {
     if constexpr (enoki::is_dynamic_v<SDMM>) {
-        cov_success =
-            enoki::vectorize(VECTORIZE_WRAP_MEMBER(prepare_cov), distribution);
+        enoki::vectorize(VECTORIZE_WRAP_MEMBER(prepare_cov), distribution);
     } else {
         distribution.prepare_cov();
     }
-    return distribution.weight.prepare() && enoki::all(cov_success);
+    return distribution.weight.prepare() && enoki::all(distribution.cov_is_psd);
 }
 
 template <typename Matrix_, typename TangentSpace_>
-auto SDMM<Matrix_, TangentSpace_>::prepare() -> MaskExpr {
-    MaskExpr is_psd = prepare_cov();
-    weight.pmf &= is_psd;
+auto SDMM<Matrix_, TangentSpace_>::prepare() -> void {
+    prepare_cov();
+    weight.pmf &= cov_is_psd;
     if (!weight.prepare()) {
         spdlog::info("all weights 0");
-        return is_psd; // MaskExpr(false);
     }
-    return is_psd;
 }
 
 template <typename Matrix_, typename TangentSpace_>
-auto SDMM<Matrix_, TangentSpace_>::prepare_cov() -> MaskExpr {
+auto SDMM<Matrix_, TangentSpace_>::prepare_cov() -> void {
     sdmm::linalg::cholesky(cov, cov_sqrt, cov_is_psd);
     inv_cov_sqrt_det = 1.f / enoki::hprod(enoki::diag(cov_sqrt));
     // bool all_psd = enoki::all(cov_is_psd);
     // if(!all_psd) {
-    //     std::cerr << fmt::format("cov={}\n", cov);
-    //     std::cerr << fmt::format("all_psd={}\n", cov_is_psd);
+    //     std::cout << fmt::format("cov={}\n", cov);
+    //     std::cout << fmt::format("all_psd={}\n", cov_is_psd);
     //     assert(all_psd);
     // }
-    return cov_is_psd;
 }
 
 template <typename Value>
@@ -218,23 +213,15 @@ auto SDMM<Matrix_, TangentSpace_>::sample(
     ScalarIn& inv_jacobian,
     TangentIn& tangent) const -> void {
     auto weight_inv_sample = rng.next_float32();
-    using Float32 = typename RNG::Float32;
     using UInt32 = typename RNG::UInt32;
     UInt32 gaussian_idx = enoki::binary_search(
         0,
         enoki::slices(weight.cdf) - 1,
-        // [&](UInt32 index) {
-        //     return enoki::gather<Float32>(weight.cdf, index) <
-        //     weight_inv_sample;
-        // }
         [&](UInt32 index) { return weight.cdf[index] < weight_inv_sample; });
     while (gaussian_idx > 0 && weight.pmf[gaussian_idx] == 0) {
         --gaussian_idx;
     }
 
-    // if(enoki::slices(tangent) != enoki::slices(gaussian_idx)) {
-    //     enoki::set_slices(tangent, enoki::slices(gaussian_idx));
-    // }
     for (size_t dim_i = 0; dim_i < CovSize; dim_i += 2) {
         auto [u1, u2] =
             box_mueller_transform(rng.next_float32(), rng.next_float32());
@@ -245,31 +232,9 @@ auto SDMM<Matrix_, TangentSpace_>::sample(
     }
 
     auto sampled_cov_sqrt = enoki::slice(cov_sqrt, gaussian_idx);
-    // enoki::set_slices(sampled_cov_sqrt, enoki::slices(gaussian_idx));
-    // for(size_t mat_i = 0; mat_i < enoki::slices(gaussian_idx); ++mat_i) {
-    //     uint32_t index = gaussian_idx.coeff(mat_i);
-    //     enoki::slice(sampled_cov_sqrt, mat_i) = enoki::slice(cov_sqrt,
-    //     index);
-    // }
-    // TODO: ^gather
-    // auto covs = enoki::gather<Matrix, sizeof(MatrixS)>(cov_sqrt.data(),
-    // weight_indices);
     tangent = TangentIn(sampled_cov_sqrt * tangent);
-    // if(enoki::slices(sample) != enoki::slices(gaussian_idx)) {
-    //     enoki::set_slices(sample, enoki::slices(gaussian_idx));
-    // }
-    // if(enoki::slices(inv_jacobian) != enoki::slices(gaussian_idx)) {
-    //     enoki::set_slices(inv_jacobian, enoki::slices(gaussian_idx));
-    // }
     sample =
         enoki::slice(tangent_space, gaussian_idx).from(tangent, inv_jacobian);
-    // for(size_t ts_i = 0; ts_i < enoki::slices(gaussian_idx); ++ts_i) {
-    //     uint32_t index = gaussian_idx.coeff(ts_i);
-    //     enoki::slice(sample, ts_i) =
-    //         enoki::slice(tangent_space, index).from(
-    //             enoki::slice(tangent, ts_i), enoki::slice(inv_jacobian, ts_i)
-    //         );
-    // }
 }
 
 template <typename Matrix_, typename TangentSpace_>
@@ -292,24 +257,6 @@ auto SDMM<Matrix_, TangentSpace_>::pdf_gaussian(
     pdf = inv_cov_sqrt_det * inv_jacobian *
         gaussian_normalization<ScalarS, CovSize> *
         enoki::exp(ScalarS(-0.5) * squared_norm);
-    // if(CovSize == 2 && !enoki::all(enoki::isfinite(pdf))) {
-    //     std::cerr << fmt::format(
-    //         "pdf={}\n"
-    //         "point={}\n"
-    //         "tangent={}\n"
-    //         "standardized={}\n"
-    //         "cov_sqrt={}\n"
-    //         "inv_cov_sqrt_det={}\n"
-    //         "inv_jacobian={}\n",
-    //         pdf,
-    //         point,
-    //         tangent,
-    //         standardized,
-    //         cov_sqrt,
-    //         inv_cov_sqrt_det,
-    //         inv_jacobian
-    //     );
-    // }
 }
 
 template <typename Matrix_, typename TangentSpace_>
@@ -317,12 +264,6 @@ template <typename EmbeddedIn>
 auto SDMM<Matrix_, TangentSpace_>::pdf_gaussian(
     const EmbeddedIn& point,
     Scalar& pdf) const -> void {
-    // #ifdef NDEBUG
-    // spdlog::warn(
-    //     "Using allocating call to pdf_gaussian. "
-    //     "Consider pre-allocating tangent_vectors."
-    // );
-    // #endif // NDEBUG
     TangentExpr tangent;
     pdf_gaussian(point, pdf, tangent);
 }
@@ -344,12 +285,6 @@ template <typename EmbeddedIn>
 auto SDMM<Matrix_, TangentSpace_>::posterior(
     const EmbeddedIn& point,
     Scalar& pdf) const -> void {
-    // #ifdef NDEBUG
-    // spdlog::warn(
-    //     "Using allocating call to posterior. "
-    //     "Consider pre-allocating tangent_vectors."
-    // );
-    // #endif // NDEBUG
     TangentExpr tangent;
     posterior(point, pdf, tangent);
 }

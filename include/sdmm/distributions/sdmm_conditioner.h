@@ -95,7 +95,7 @@ inline auto prepare(
         VECTORIZE_WRAP_MEMBER(prepare_vectorized),
         std::forward<Conditioner>(conditioner),
         joint);
-    bool cdf_success = conditioner.marginal.weight.prepare();
+    [[maybe_unused]] bool cdf_success = conditioner.marginal.weight.prepare();
     assert(cdf_success);
 }
 
@@ -110,17 +110,6 @@ inline auto create_conditional(
         conditioner,
         point,
         out);
-    bool cdf_success = out.weight.prepare();
-    return cdf_success;
-}
-
-template <typename Conditioner>
-inline auto create_conditional_static(
-    // cannot declare point as const because enoki complains
-    Conditioner& conditioner,
-    typename Conditioner::MarginalEmbeddedS& point,
-    typename Conditioner::Conditional& out) -> bool {
-    conditioner.create_conditional_vectorized(point, out);
     bool cdf_success = out.weight.prepare();
     return cdf_success;
 }
