@@ -9,10 +9,11 @@
 #include "sdmm/spaces/directional.h"
 #include "sdmm/spaces/euclidian.h"
 #include "sdmm/spaces/spatio_directional.h"
+#include "sdmm/spaces/offset_directional.h"
 
 using Scalar = float;
 
-template <size_t PacketSize>
+template<template<typename, typename> typename DirectionalTangentSpace, size_t PacketSize>
 void conditioning_spatio_directional(benchmark::State& state) {
     constexpr static size_t JointSize = 5;
     constexpr static size_t MarginalSize = 3;
@@ -33,7 +34,7 @@ void conditioning_spatio_directional(benchmark::State& state) {
         sdmm::Vector<Value, MarginalSize>>;
     using MarginalSDMM =
         sdmm::SDMM<sdmm::Matrix<Value, MarginalSize>, MarginalTangentSpace>;
-    using ConditionalTangentSpace = sdmm::DirectionalTangentSpace<
+    using ConditionalTangentSpace = DirectionalTangentSpace<
         sdmm::Vector<Value, ConditionalSize + 1>,
         sdmm::Vector<Value, ConditionalSize>>;
     using ConditionalSDMM = sdmm::
@@ -78,12 +79,18 @@ void conditioning_spatio_directional(benchmark::State& state) {
             Scalar(query_i % 3),
             Scalar((query_i + 1) % 3),
             Scalar((query_i + 2) % 3)};
-        // conditional.posterior(query, pdf);
         enoki::vectorize_safe(
             VECTORIZE_WRAP_MEMBER(posterior),
             conditional,
             query,
             pdf);
+        // sdmm::vectorize(
+        //     &sdmm::vectorized_class_t<ConditionalSDMM>::template posterior<
+        //         decltype(query)
+        //         >,
+        //     conditional,
+        //     query,
+        //     pdf);
         pdf_hsum = enoki::hsum_nested(pdf);
 
         benchmark::DoNotOptimize(pdf_sum += pdf_hsum);
@@ -93,10 +100,16 @@ void conditioning_spatio_directional(benchmark::State& state) {
 }
 
 // Register the function as a benchmark
-BENCHMARK_TEMPLATE(conditioning_spatio_directional, 1);
-BENCHMARK_TEMPLATE(conditioning_spatio_directional, 4);
-BENCHMARK_TEMPLATE(conditioning_spatio_directional, 8);
-BENCHMARK_TEMPLATE(conditioning_spatio_directional, 16);
-BENCHMARK_TEMPLATE(conditioning_spatio_directional, 32);
+BENCHMARK_TEMPLATE(conditioning_spatio_directional, sdmm::DirectionalTangentSpace, 1);
+BENCHMARK_TEMPLATE(conditioning_spatio_directional, sdmm::DirectionalTangentSpace, 4);
+BENCHMARK_TEMPLATE(conditioning_spatio_directional, sdmm::DirectionalTangentSpace, 8);
+BENCHMARK_TEMPLATE(conditioning_spatio_directional, sdmm::DirectionalTangentSpace, 16);
+BENCHMARK_TEMPLATE(conditioning_spatio_directional, sdmm::DirectionalTangentSpace, 32);
+
+BENCHMARK_TEMPLATE(conditioning_spatio_directional, sdmm::OffsetDirectionalTangentSpace, 1);
+BENCHMARK_TEMPLATE(conditioning_spatio_directional, sdmm::OffsetDirectionalTangentSpace, 4);
+BENCHMARK_TEMPLATE(conditioning_spatio_directional, sdmm::OffsetDirectionalTangentSpace, 8);
+BENCHMARK_TEMPLATE(conditioning_spatio_directional, sdmm::OffsetDirectionalTangentSpace, 16);
+BENCHMARK_TEMPLATE(conditioning_spatio_directional, sdmm::OffsetDirectionalTangentSpace, 32);
 
 BENCHMARK_MAIN();
