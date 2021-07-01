@@ -126,7 +126,7 @@ class STree {
         auto& stats = m_nodes[node_i].value->stats;
         auto mean_point = stats.mean_point();
         auto mean_sqr_point = stats.mean_sqr_point();
-        float stats_size = (float) stats.size;
+        float stats_size = (float)stats.size;
         auto var_point = (mean_sqr_point -
                           enoki::sqr(mean_point / stats_size) * stats_size) /
             (float)(stats_size - 1);
@@ -157,15 +157,12 @@ class STree {
         int axis = m_nodes[node_i].axis;
         child.axis = (axis + 1) % Size;
         child.aabb = m_nodes[node_i].aabb;
-        // child.data_aabb = m_nodes[node_i].data_aabb;
         if (child_i == 0) {
             child.aabb.min.coeff(axis) +=
                 splitLocation * child.aabb.diagonal().coeff(axis);
-            // child.data_aabb.min.coeff(axis) = child.aabb.min.coeff(axis);
         } else {
             child.aabb.max.coeff(axis) -=
                 (1.f - splitLocation) * child.aabb.diagonal().coeff(axis);
-            // child.data_aabb.max.coeff(axis) = child.aabb.max.coeff(axis);
         }
 
         auto childValue =
@@ -184,9 +181,18 @@ class STree {
                     m_nodes[node_i].value->data.point.coeff(1), sample_i),
                 enoki::slice(
                     m_nodes[node_i].value->data.point.coeff(2), sample_i));
-            if (child.aabb.contains(point)) {
+
+            if (child_i == 0 &&
+                child.aabb.min.coeff(axis) < point.coeff(axis)) {
                 childValue->data.push_back(
                     enoki::slice(m_nodes[node_i].value->data, sample_i));
+            } else if (
+                child_i == 1 &&
+                child.aabb.max.coeff(axis) >= point.coeff(axis)) {
+                childValue->data.push_back(
+                    enoki::slice(m_nodes[node_i].value->data, sample_i));
+            }
+            if (child.aabb.contains(point)) {
                 childValue->stats.push_back(point);
             }
         }
