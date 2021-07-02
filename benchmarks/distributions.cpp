@@ -20,8 +20,9 @@ void conditioning_spatio_directional(benchmark::State& state) {
     static_assert(JointSize == MarginalSize + ConditionalSize);
 
     constexpr static size_t NComponents = 16;
+    // using Value = enoki::Array<Scalar, NComponents>;
     using Packet = enoki::Packet<Scalar, PacketSize>;
-    using Value = enoki::Array<Packet, NComponents>;
+    using Value = enoki::DynamicArray<Packet>;
     using JointTangentSpace = sdmm::SpatioDirectionalTangentSpace<
         sdmm::Vector<Value, JointSize + 1>,
         sdmm::Vector<Value, JointSize>>;
@@ -72,16 +73,17 @@ void conditioning_spatio_directional(benchmark::State& state) {
     ConditionalSDMM conditional;
     enoki::set_slices(conditional, enoki::slices(distribution));
     for (auto _ : state) {
-        sdmm::create_conditional_static(conditioner, point, conditional);
+        sdmm::create_conditional(conditioner, point, conditional);
         sdmm::embedded_s_t<ConditionalSDMM>{
             Scalar(query_i % 3),
             Scalar((query_i + 1) % 3),
             Scalar((query_i + 2) % 3)};
-        // enoki::vectorize_safe(
-        //     VECTORIZE_WRAP_MEMBER(posterior),
-        //     conditional,
-        //     query,
-        //     pdf);
+        // conditional.posterior(query, pdf);
+        enoki::vectorize_safe(
+            VECTORIZE_WRAP_MEMBER(posterior),
+            conditional,
+            query,
+            pdf);
         pdf_hsum = enoki::hsum_nested(pdf);
 
         benchmark::DoNotOptimize(pdf_sum += pdf_hsum);
