@@ -43,20 +43,15 @@ struct Data {
     using NormalS = sdmm::Vector<ScalarS, 3>;
     using PositionS = sdmm::Vector<ScalarS, 3>;
 
-    using EmbeddedStats = enoki::replace_scalar_t<EmbeddedS, double>;
-    using PositionStats =
-        PositionS; // enoki::replace_scalar_t<PositionS, double>;
-
-    // If adding a new data-entry, remember to update reserve.
+    // If adding a new data-entry, remember to update:
+    // reserve, move constructor, and move-assignement operator.
     Embedded point;
     Normal normal;
     Scalar weight;
 
-    EmbeddedStats mean_point = 0;
-    EmbeddedStats mean_sqr_point = 0;
-    uint32_t stats_size = 0;
-
     uint32_t size = 0;
+    static_assert(std::atomic<uint32_t>::is_always_lock_free);
+
     uint32_t capacity = 0;
 
     auto remove_non_finite() -> void;
@@ -75,6 +70,7 @@ struct Data {
             return;
         }
 
+        // uint32_t idx = size.fetch_add(1, std::memory_order_relaxed);
         uint32_t idx = size++;
 
         if (idx >= enoki::slices(point)) {
@@ -88,20 +84,11 @@ struct Data {
         enoki::slice(point, idx) = point_;
         enoki::slice(normal, idx) = normal_;
         enoki::slice(weight, idx) = weight_;
-
-        ++stats_size;
-        mean_point += point_;
-        mean_sqr_point += enoki::sqr(point_);
     }
 
     auto clear() -> void {
+        // size.store(0);
         size = 0;
-    }
-
-    auto clear_stats() -> void {
-        mean_point = enoki::zero<EmbeddedStats>();
-        mean_sqr_point = enoki::zero<EmbeddedStats>();
-        stats_size = 0;
     }
 
     auto reserve(uint32_t new_capacity) -> void {
@@ -112,7 +99,6 @@ struct Data {
         enoki::set_slices(normal, capacity);
         enoki::set_slices(weight, capacity);
         clear();
-        clear_stats();
     }
 
     auto sum_weights() -> ScalarS {

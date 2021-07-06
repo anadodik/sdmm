@@ -78,7 +78,7 @@ class STree {
     using AABB = typename Node::AABB;
     using Point = typename AABB::Point;
 
-    STree() = default;
+    STree() = delete;
     STree(const AABB& aabb, std::unique_ptr<Value> value) : m_aabb(aabb) {
         // Enlarge AABB to turn it into a cube. This has the effect
         // of nicer hierarchical subdivisions.
@@ -89,6 +89,8 @@ class STree {
         m_nodes.emplace_back();
         m_nodes[0].aabb = m_aabb;
         m_nodes[0].value = std::move(value);
+
+        m_leaf_nodes = 1; // .store(1);
     }
 
     Value* find(const Point& point) const {
@@ -112,6 +114,10 @@ class STree {
         return m_nodes.size();
     }
 
+    uint16_t leaf_nodes() const {
+        return m_leaf_nodes; // .load();
+    }
+
     const auto& data() {
         return m_nodes;
     }
@@ -121,15 +127,16 @@ class STree {
     }
 
     std::pair<int, Scalar> get_split_location(int node_i) {
-        auto& data = m_nodes[node_i].value->data;
-        auto mean_point = data.mean_point;
-        auto mean_sqr_point = data.mean_sqr_point;
+        auto& stats = m_nodes[node_i].value->stats;
+        auto mean_point = stats.mean_point();
+        auto mean_sqr_point = stats.mean_sqr_point();
+        float stats_size = (float) stats.size;
         auto var_point =
             (mean_sqr_point -
-             enoki::sqr(mean_point / data.stats_size) * data.stats_size) /
-            (float)(data.stats_size - 1);
-        mean_point /= (float)data.stats_size;
-        mean_sqr_point /= (float)data.stats_size;
+             enoki::sqr(mean_point / stats_size) * stats_size) /
+            (float)(stats_size - 1);
+        mean_point /= stats_size;
+        mean_sqr_point /= stats_size;
 
         size_t max_var_i = 0;
         for (size_t var_i = 0; var_i < 3; ++var_i) {
@@ -144,7 +151,7 @@ class STree {
         // std::cerr <<
         //     "var=" << var_point <<
         //     ", mean=" << mean_point <<
-        //     ", data size=" << data.stats_size <<
+        //     ", data size=" << stats.size <<
         //     ", aabb_min=" << aabb_min <<
         //     ", aabb_diag=" << aabb_diagonal <<
         //     "\n";
@@ -189,9 +196,19 @@ class STree {
                     m_nodes[node_i].value->data.point.coeff(1), sample_i),
                 enoki::slice(
                     m_nodes[node_i].value->data.point.coeff(2), sample_i));
-            if (child.aabb.contains(point)) {
+
+            if (child_i == 0 &&
+                child.aabb.min.coeff(axis) < point.coeff(axis)) {
                 childValue->data.push_back(
                     enoki::slice(m_nodes[node_i].value->data, sample_i));
+            } else if (
+                child_i == 1 &&
+                child.aabb.max.coeff(axis) >= point.coeff(axis)) {
+                childValue->data.push_back(
+                    enoki::slice(m_nodes[node_i].value->data, sample_i));
+            }
+            if (child.aabb.contains(point)) {
+                childValue->stats.push_back(point);
             }
         }
         child.value = std::move(childValue);
@@ -275,7 +292,16 @@ class STree {
             return;
         }
 
-        if (m_nodes[node_i].value->data.stats_size > split_threshold) {
+        // if(m_nodes[node_i].value->data.stats_size != m_nodes[node_i].value->stats.size) {
+        //     throw std::runtime_error(
+        //         fmt::format(
+        //             "stats sizes do not match {} == {} != {}", 
+        //             m_nodes[node_i].value->data.size,
+        //             m_nodes[node_i].value->data.stats_size,
+        //             m_nodes[node_i].value->stats.size
+        //             ));
+        // }
+        if (m_nodes[node_i].value->stats.size > split_threshold) {
             // m_nodes[node_i].data_aabb = AABB(
             //     m_nodes[node_i].value->data.min_position,
             //     m_nodes[node_i].value->data.max_position
@@ -294,12 +320,13 @@ class STree {
                 m_nodes.push_back(std::move(child));
                 m_nodes[node_i].children[child_i] = child_idx;
             }
-            m_nodes[node_i].value->data.clear_stats();
+            m_nodes[node_i].value->stats.clear();
             m_nodes[node_i].value->data.clear();
             m_nodes[node_i].value = nullptr;
             for (int child_i = 0; child_i < 2; ++child_i) {
                 int child_idx = m_nodes[node_i].children[child_i];
                 split_recurse(child_idx, split_threshold, recursion_depth + 1);
+                ++m_leaf_nodes; // .fetch_add(1);
             }
         }
         // std::cerr << "Split node " << idx << ", children ids = " <<
@@ -309,6 +336,7 @@ class STree {
    private:
     std::vector<Node> m_nodes;
     AABB m_aabb;
+    uint16_t m_leaf_nodes;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(STree, m_nodes, m_aabb);
 };
