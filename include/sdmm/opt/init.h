@@ -41,10 +41,10 @@ void initialize(
     static const ScalarS contained_mass = 0.90;
     static const ScalarS max_rad_sqr =
         (ScalarS)boost::math::quantile(chi_sqr, contained_mass);
-    ScalarS width_var = 0.5 * spatial_distance * spatial_distance / max_rad_sqr;
+    ScalarS width_var = spatial_distance * spatial_distance / max_rad_sqr;
     ScalarS depth_var = 3e-2 * 3e-2 / max_rad_sqr;
 
-    ScalarS directional_var = 2.f * M_PI / 8.f;
+    ScalarS directional_var = 1.f * M_PI / 8.f;
     sdmm.cov(3, 3) = enoki::full<Value>(directional_var, (size_t)n_components);
     sdmm.cov(4, 4) = enoki::full<Value>(directional_var, (size_t)n_components);
 
@@ -61,6 +61,7 @@ void initialize(
     sampling_dist.pmf = enoki::vectorize(
         [](auto&& w) { return enoki::min(enoki::max(w, 1e-3), 3); },
         data.weight);
+    enoki::set_slices(data.weight, data.size);
     sampling_dist.prepare();
     const ScalarS SPATIAL_THRESHOLD = 2e-2 * 2e-2;
     const ScalarS NORMAL_THRESHOLD = 2e-1 * 2e-1;
@@ -180,31 +181,13 @@ void initialize(
         enoki::zero<sdmm::matrix_t<SDMM>>((size_t)n_components);
     for (size_t slice_i = 0; slice_i < n_components; ++slice_i) {
         enoki::slice(cov_prior, slice_i) = sdmm::matrix_s_t<SDMM>(
-            2e-3,
-            0,
-            0,
-            0,
-            0,
-            0,
-            2e-3,
-            0,
-            0,
-            0,
-            0,
-            0,
-            2e-3,
-            0,
-            0,
-            0,
-            0,
-            0,
-            2e-4,
-            0,
-            0,
-            0,
-            0,
-            0,
-            2e-4);
+            // clang-format off
+            2e-3, 0, 0, 0, 0,
+            0, 2e-3, 0, 0, 0,
+            0, 0, 2e-3, 0, 0,
+            0, 0, 0, 2e-4, 0,
+            0, 0, 0, 0, 2e-4);
+            // clang-format on
     }
     em.set_priors(weight_prior, cov_prior_strength, cov_prior);
 }

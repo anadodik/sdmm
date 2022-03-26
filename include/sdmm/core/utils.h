@@ -14,6 +14,8 @@
 #include "sdmm/linalg/matrix.h"
 #include "sdmm/linalg/vector.h"
 
+#include "tracy/Tracy.hpp"
+
 #define VECTORIZE_WRAP(FUNC_NAME) [](auto&&... params) { FUNC_NAME(params...); }
 #define VECTORIZE_WRAP_FWD(FUNC_NAME)                         \
     [](auto&&... params) {                                    \

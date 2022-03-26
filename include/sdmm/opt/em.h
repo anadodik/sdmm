@@ -6,9 +6,10 @@
 #include "sdmm/distributions/sdmm.h"
 #include "sdmm/opt/data.h"
 
+
 #define WARN_ON_FAIL(EXPR, OUT)             \
     do {                                    \
-        if (!EXPR) {                        \
+        if (false && !EXPR) {                        \
             spdlog::warn(#EXPR "={}", OUT); \
         }                                   \
     } while (0)
@@ -132,6 +133,7 @@ struct EM {
     SDMMTangent tangent;
 
     int iterations_run = 0;
+    int samples_seen = 0;
     ScalarS learning_rate = 0.2;
     ScalarS alpha = 0.5;
 
@@ -152,6 +154,7 @@ struct EM {
         tangent,
 
         iterations_run,
+        samples_seen,
 
         weight_prior,
         cov_prior_strength,
@@ -258,6 +261,7 @@ auto EM<SDMM_>::compute_stats_model_parallel(
     //     [](auto&& stats) { stats =
     //     enoki::zero<enoki::expr_t<decltype(stats)>>(); }, batch_stats
     // );
+    samples_seen += data.size;
     for (size_t slice_i = 0; slice_i < data.size; ++slice_i) {
         auto data_slice = enoki::slice(data, slice_i);
         if (!sdmm::is_valid_sample(data_slice.weight)) {
@@ -278,11 +282,13 @@ auto EM<SDMM_>::compute_stats_model_parallel(
             data_slice.point,
             posteriors,
             tangent);
+        
         // spdlog::info("tangent={}", tangent);
         // spdlog::info("slice_{} pdf={}", slice_i, posteriors);
         // spdlog::info("slice_{} pmf={}", slice_i, distribution.weight.pmf);
         auto posterior_sum = enoki::hsum(posteriors);
         if (posterior_sum == 0 || !std::isfinite(1.f / posterior_sum)) {
+            --samples_seen;
             continue;
         }
 
@@ -353,8 +359,10 @@ auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
     using MatrixExpr = typename Stats<SDMM_>::MatrixExpr;
 
     ScalarS weight_prior_decay =
+        // 1.0 / ((float) em.samples_seen);
         ScalarS(1.0 / enoki::pow(3.0, enoki::min(30, em.iterations_run)));
     ScalarS cov_prior_strength_decay =
+        // 1.0 / ((float) em.samples_seen);
         ScalarS(1.0 / enoki::pow(2.0, enoki::min(30, em.iterations_run)));
 
     ScalarS weight_prior_decayed = em.weight_prior * weight_prior_decay;
@@ -399,26 +407,26 @@ auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
             weight_prior_decayed),
         0);
 
-    if (!enoki::all(enoki::isfinite(em.updated_model.weight))) {
-        std::cout << fmt::format(
-            "em.updated_model.weight={}\n"
+    // if (!enoki::all(enoki::isfinite(em.updated_model.weight))) {
+    //     std::cout << fmt::format(
+    //         "em.updated_model.weight={}\n"
 
-            "distribution=\n"
+    //         "distribution=\n"
 
-            "weight={}\n"
-            // "to={}\n"
-            "mean={}\n"
-            "cond_cov={}\n"
-            "cov_sqrt={}\n"
-            "",
-            em.updated_model.weight,
+    //         "weight={}\n"
+    //         // "to={}\n"
+    //         "mean={}\n"
+    //         "cond_cov={}\n"
+    //         "cov_sqrt={}\n"
+    //         "",
+    //         em.updated_model.weight,
 
-            distribution.weight.pmf,
-            // distribution.tangent_space.coordinate_system.to,
-            distribution.tangent_space.mean,
-            distribution.cov,
-            distribution.cov_sqrt);
-    }
+    //         distribution.weight.pmf,
+    //         // distribution.tangent_space.coordinate_system.to,
+    //         distribution.tangent_space.mean,
+    //         distribution.cov,
+    //         distribution.cov_sqrt);
+    // }
 
     em.updated_model.mean = enoki::select(
         non_zero_weights && finite_rcp_weights,
@@ -434,31 +442,31 @@ auto update_model(SDMM_& distribution, EM<SDMM_>& em) -> void {
         em.stats_normalized.cov - mean_subtraction + cov_prior_decayed;
 
     MatrixExpr cov_normalized = cov_unnormalized * rcp_cov_weight;
-    auto finite_mat = [](auto&& mat) {
-        for (size_t i = 0; i < std::decay_t<decltype(mat)>::Rows; ++i) {
-            for (size_t j = 0; j < std::decay_t<decltype(mat)>::Cols; ++j) {
-                bool isfinite = enoki::all(enoki::isfinite(mat(i, j)));
-                if (!isfinite) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    };
+    // auto finite_mat = [](auto&& mat) {
+    //     for (size_t i = 0; i < std::decay_t<decltype(mat)>::Rows; ++i) {
+    //         for (size_t j = 0; j < std::decay_t<decltype(mat)>::Cols; ++j) {
+    //             bool isfinite = enoki::all(enoki::isfinite(mat(i, j)));
+    //             if (!isfinite) {
+    //                 return false;
+    //             }
+    //         }
+    //     }
+    //     return true;
+    // };
 
-    if (!finite_mat(cov_normalized)) {
-        spdlog::warn(
-            "!isfinite(cov)={}=\n{}\n*{}\n",
-            cov_normalized,
-            cov_unnormalized,
-            rcp_cov_weight);
-    }
+    // if (!finite_mat(cov_normalized)) {
+    //     spdlog::warn(
+    //         "!isfinite(cov)={}=\n{}\n*{}\n",
+    //         cov_normalized,
+    //         cov_unnormalized,
+    //         rcp_cov_weight);
+    // }
     em.updated_model.cov = enoki::select(
         non_zero_weights && finite_rcp_weights,
         cov_normalized + em.depth_prior,
         distribution.cov);
     distribution.weight.pmf = em.updated_model.weight;
-    typename SDMM_::ScalarExpr inv_jacobian;
+    // typename SDMM_::ScalarExpr inv_jacobian;
     auto [new_embedded_mean, from_jacobian] =
         distribution.tangent_space.from_jacobian(em.updated_model.mean);
     distribution.tangent_space.set_mean(new_embedded_mean);
@@ -494,6 +502,7 @@ ENOKI_STRUCT_SUPPORT(
     tangent,
 
     iterations_run,
+    samples_seen,
 
     weight_prior,
     cov_prior_strength,
